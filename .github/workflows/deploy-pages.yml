@@ -3,6 +3,9 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    paths:
+      - 'businesssearcher-frontend/**'
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -13,6 +16,10 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: businesssearcher-frontend
 
 jobs:
   build-deploy:
@@ -27,19 +34,18 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: businesssearcher-frontend/package-lock.json
 
       - run: npm ci
 
       - name: Build
         env:
-          # Configurar en Settings → Secrets and variables → Actions → Variables
+          # Configurar en Settings -> Secrets and variables -> Actions -> Variables
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_ADMIN_EMAIL: ${{ vars.VITE_ADMIN_EMAIL }}
-          # Secret opcional para el chat con IA (queda expuesta en el bundle público)
-          VITE_GROQ_API_KEY: ${{ secrets.VITE_GROQ_API_KEY }}
           # Sin backend configurado, la app funciona en modo demo con datos mock
           VITE_MOCK: ${{ vars.VITE_API_URL == '' && 'true' || 'false' }}
-        run: npm run build -- --base=/FoodFinder/
+        run: npm run build -- --base=/${{ github.event.repository.name }}/
 
       # GitHub Pages sirve 404.html en rutas desconocidas; con la copia del
       # index, react-router recibe la URL original y resuelve la ruta (SPA fallback)
@@ -52,7 +58,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: businesssearcher-frontend/dist
 
       - id: deployment
         uses: actions/deploy-pages@v4
