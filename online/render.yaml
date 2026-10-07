@@ -1,0 +1,75 @@
+# Blueprint de Render — despliega la API como Web Service Docker (plan free).
+# Render lee este archivo al crear el servicio via "New > Blueprint".
+# Los envVars con `sync: false` se piden en el dashboard al crear el servicio
+# (ahí van los secretos: nunca se guardan en el repo).
+services:
+  - type: web
+    name: businesssearcher-api
+    runtime: docker
+    plan: free
+    region: virginia # misma zona que Neon (aws us-east-1) para latencia mínima
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      # Render termina el TLS y reenvía HTTP; sin esto, UseHttpsRedirection
+      # entra en bucle de redirecciones. Activa el middleware ForwardedHeaders.
+      - key: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+        value: "true"
+      - key: ConnectionStrings__DefaultConnection
+        sync: false # cadena Npgsql de Neon
+      - key: Jwt__Secret
+        sync: false # mínimo 32 caracteres aleatorios
+      - key: Jwt__Issuer
+        value: BusinessSearcher.API
+      - key: Jwt__Audience
+        value: BusinessSearcher.Clients
+      - key: Jwt__ExpirationDays
+        value: "1"
+      # Email: en Render free los puertos SMTP salientes están bloqueados; usar Resend
+      # (API HTTP, puerto 443). Poner Email__Provider=resend y la API key de resend.com.
+      - key: Email__Provider
+        value: resend # "resend" (HTTP) o "smtp"
+      - key: Email__ResendApiKey
+        sync: false # API key de https://resend.com (re_...)
+      - key: Email__FromEmail
+        sync: false # remitente de un dominio verificado en Resend (o onboarding@resend.dev para pruebas)
+      - key: Email__FromName
+        value: FoodFinder
+      # SMTP (solo si Email__Provider=smtp; no funciona en Render free)
+      - key: Email__SmtpHost
+        value: smtp.gmail.com
+      - key: Email__SmtpPort
+        value: "587"
+      - key: Email__SmtpUser
+        sync: false
+      - key: Email__SmtpPassword
+        sync: false # app password de Gmail
+      # Orígenes del frontend permitidos por CORS: actualizar cuando el
+      # frontend tenga URL pública (Cors__AllowedOrigins__1, __2, ...)
+      - key: Cors__AllowedOrigins__0
+        value: http://localhost:4321
+      - key: Cors__AllowedOrigins__1
+        value: http://localhost:5173
+      - key: Cors__AllowedOrigins__2
+        value: https://raikomh.github.io
+      - key: Cors__AllowedOrigins__3
+        value: https://foodfinder.raikomh1241.workers.dev
+      - key: Frontend__DashboardUrl
+        value: https://raikomh.github.io/FoodFinder
+      - key: Frontend__ResetPasswordUrl
+        value: https://raikomh.github.io/FoodFinder/reset-password
+      # Email de la cuenta admin: al loguearse con este email se le asigna el rol
+      # AccountRole.Admin (ver InfrastructureServices.cs). Debe coincidir EXACTO
+      # (case-insensitive) con el email real de la cuenta admin.
+      - key: Chat__AdminEmail
+        sync: false
+      # API key de https://console.groq.com/keys — sin ella el chat de soporte
+      # responde "El asistente de IA no está configurado en el servidor todavía."
+      - key: Groq__ApiKey
+        sync: false
+      # Sincronización con instalaciones on-premise (modo Local): cada negocio genera su propia
+      # API key desde su cuenta (POST /api/v1/sync/api-key, autoservicio) — no requiere ninguna
+      # variable de entorno acá; la key se persiste hasheada en Tenant.SyncApiKeyHash.

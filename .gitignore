@@ -1,0 +1,20 @@
+# Dependencias y compilados
+node_modules/
+dist/
+bin/
+obj/
+publish/
+.wrangler/
+.astro/
+.vs/
+TestResults/
+
+# Logs y archivos locales
+logs/
+*.log
+.env
+.env.local
+.env.*.local
+
+# Secretos: se configuran con dotnet user-secrets o variables de entorno, nunca en el repo
+appsettings.Local.json

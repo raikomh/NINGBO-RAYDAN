@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>BusinessSearcher.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="12.4.1" />
+    <PackageReference Include="FluentValidation" Version="11.10.0" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.10.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+
+  <!--
+    CORRECCIÓN: Application necesita IFormFile (Microsoft.AspNetCore.Http) para los
+    comandos de subida de imágenes. El paquete NuGet legacy "Microsoft.AspNetCore.Http.Abstractions"
+    2.2.0 funciona como shim de compatibilidad, pero genera warning NU1701 en .NET 8.
+    FrameworkReference es la forma correcta y moderna de traer tipos de ASP.NET Core
+    a una librería de clases (Microsoft.NET.Sdk) sin necesitar el SDK Web completo.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BusinessSearcher.Domain\BusinessSearcher.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,232 @@
+TAREAS PENDIENTES — BusinessSearcher (retomar en otra PC)
+============================================================
+Generado: 2026-07-31.
+
+============================================================
+PROMPT LISTO PARA PEGAR (copia desde aquí hasta la línea de ='s de abajo)
+============================================================
+Estamos retomando trabajo de una sesión anterior de Claude Code en el proyecto BusinessSearcher.
+Lee el resto de este archivo (tareas a realizar.txt) para el contexto completo: qué se pidió, qué
+ya se implementó y compiló en la sesión anterior, y qué falta. En resumen, hay 3 frentes abiertos:
+
+1. Un crash sin resolver al tocar el botón "Premium" en la app móvil (.NET MAUI) — no se pudo
+   reproducir en la sesión anterior, necesito que me des el stack trace/log real o me digas en
+   qué pantalla exacta ocurre para poder diagnosticarlo (ver TAREA 1 abajo).
+2. Una lista de 14 funcionalidades de TPV/POS comparando contra un sistema de referencia (Leo/spv);
+   7 ya quedaron implementadas y compilando, 7 siguen pendientes (ver TAREA 2 abajo, con el detalle
+   de qué falta exactamente en cada una).
+3. Un sistema de notificación para el admin que avise cuando un cliente lleva 1 mes calendario sin
+   pagar (usando meses reales de 28-31 días, no 30 fijos) — todavía no se empezó, falta explorar
+   el modelo de Tenant/Subscription antes de diseñarlo (ver TAREA 3 abajo).
+
+IMPORTANTE: nada de lo hecho en la sesión anterior está commiteado todavía en ninguno de los 3
+repos (backend, frontend web, app móvil) — revisa `git status`/`git diff` en cada uno antes de
+seguir para confirmar que los cambios siguen ahí (esta PC puede ser distinta a donde se generaron).
+
+Por favor: primero confirmá el estado de los 3 repos, después seguí con la TAREA 1 (necesito darte
+más info del crash) y en paralelo podés continuar con los ítems pendientes de la TAREA 2 en el
+orden que tiene más sentido técnicamente. No toques la TAREA 3 hasta que hablemos del diseño.
+============================================================
+FIN DEL PROMPT — detalle completo de contexto y tareas a continuación
+============================================================
+
+REPOS INVOLUCRADOS (rutas locales en esta PC, ajustar si cambian de máquina):
+- Backend (.NET):        F:\Proyectos\Food\BusinessSearcher_MVP Final\BusinessSearcher_MVP\BS_Solution
+- Frontend web (React):  F:\Proyectos\Food\businesssearcher-frontend
+- App móvil (.NET MAUI): F:\Proyectos\Food\FoodFinderApp\FoodFinderApp_New
+- Proyecto de referencia (POS a comparar): F:\Proyectos\Leo\spv (backend-legacy = Node/Express es la fuente de verdad más completa; backend/Spv.Api es un .NET en migración parcial)
+
+============================================================
+TAREA 1 — Crash al tocar el botón "Premium" (SIN RESOLVER, necesita más info del usuario)
+============================================================
+El usuario reportó: "la aplicacion cuando se toca el boton premium se crashea" y luego aclaró
+que "se cierra la aplicacion" (no es solo un error visual, la app se cierra del todo).
+
+Esto apunta a la APP MÓVIL (.NET MAUI, FoodFinderApp_New), no al panel web de admin, porque un
+cierre completo de la app es típico de una excepción no controlada en una app nativa, mientras
+que un error de JS en el navegador normalmente deja la pestaña abierta (pantalla en blanco), no
+la "cierra".
+
+Hallazgos hasta ahora (revisión estática, NO se pudo reproducir en vivo):
+- El único botón con label "Premium"/"Mejorar a Premium" real en la app móvil está en
+  Views/ProfilePage.xaml (línea ~171): `<Button Text="{Binding UpgradeButtonText}" .../>`
+  → NO TIENE `Command` asociado ni hay `Clicked` en ProfilePage.xaml.cs. Es decir, hoy ese botón
+  no hace nada al tocarlo (no debería crashear, pero es una funcionalidad incompleta/muerta).
+- No existe ninguna "PremiumPage"/"SubscriptionPage" registrada en AppShell.xaml.cs (Routing.RegisterRoute).
+- Los demás lugares donde se menciona "Premium" (IntelligenceViewModel.cs, AlertsViewModel.cs) están
+  bien protegidos con `if (!_auth.IsPremium) { DisplayAlert(...); return; }` — no deberían crashear.
+- Se lanzó un build en background del proyecto MAUI (target net10.0-windows10.0.19041.0) para
+  detectar errores de compilación. Terminó DESPUÉS de 36 minutos con FALLO, pero el fallo es de
+  RESTORE de paquetes NuGet (timeouts descargando Microsoft.WindowsAppSDK 1.6/1.7/1.8 y sus
+  dependencias WinUI/Runtime/ML desde api.nuget.org), NO un error de compilación del código. O sea:
+  NO aporta información sobre el crash — solo confirma que este entorno tiene problemas de red/
+  velocidad para bajar los paquetes gigantes de WindowsAppSDK la primera vez.
+  Comando usado:
+    cd "F:\Proyectos\Food\FoodFinderApp\FoodFinderApp_New"
+    dotnet build FoodFinderApp.csproj -f net10.0-windows10.0.19041.0 -c Debug
+  RECOMENDACIÓN: no repetir el build para "net10.0-windows..." si la red sigue lenta (puede volver
+  a tardar 30+ min y fallar igual). Mejor opciones para probar compilación sin ese costo:
+    - `dotnet build FoodFinderApp.csproj -f net10.0-android -c Debug` (no depende de WindowsAppSDK)
+    - Abrir la solución en Visual Studio, que reintenta descargas de forma más resiliente y cachea
+      paquetes entre sesiones.
+
+SIGUIENTE PASO recomendado (necesita al usuario):
+1. Volver a intentar el build de Windows (o abrir el proyecto en Visual Studio) para descartar
+   errores de compilación, y/o desplegar en el emulador/dispositivo Android real donde el usuario
+   vio el crash.
+2. Pedirle al usuario el stack trace o log exacto del crash (en Android: `adb logcat` filtrado por
+   el proceso de la app; en Windows: el diálogo de excepción de Visual Studio al debuggear).
+3. Preguntar en qué pantalla exacta ocurre: ¿Perfil (ProfilePage, botón "Mejorar a Premium"),
+   Dashboard, Alertas, Inteligencia (recetas/planificador), Referidos?
+4. Una vez identificado el punto real del crash, revisar ese ViewModel/Page específico.
+
+DECISIÓN DE DISEÑO PENDIENTE (para cuando se resuelva): el botón "Mejorar a Premium" no tiene
+ningún flujo de pago in-app (no hay Stripe ni nada similar en el móvil). Falta decidir con el
+usuario a dónde debe llevar ese botón (¿contactar al admin por WhatsApp? ¿pantalla informativa?
+¿deep link a una página de pago web?).
+
+============================================================
+TAREA 2 — Funcionalidades TPV/POS faltantes (comparando Leo/spv vs BS_Solution)
+============================================================
+El usuario pidió comparar Leo/spv (sistema POS de referencia) contra el módulo TPV/Operations de
+BS_Solution + businesssearcher-frontend, e implementar lo que falte. Se identificaron 14 gaps
+(ordenados por impacto). El usuario pidió implementar TODOS ("las otras que hagan falta"),
+priorizando primero: historial de ventas+reembolso, costo promedio ponderado, prorrateo de gastos,
+y terminales.
+
+ESTADO ACTUAL — YA IMPLEMENTADO Y COMPILANDO (backend + frontend, tsc y dotnet build OK):
+
+[x] #1 Historial de ventas + reembolso en UI
+    - Nuevo archivo: businesssearcher-frontend/src/components/dashboard/pages/ops/SalesPage.tsx
+    - Ruta agregada en App.tsx: /dashboard/ops/sales
+    - Ítem "Ventas" agregado en Sidebar.tsx
+    - Usa los hooks ya existentes useOpsSales() y useRefundSale() (backend ya los tenía).
+
+[x] #2 Costo promedio ponderado al comprar mercancía
+[x] #3 Prorrateo de gastos asociados (flete/aduana) al costo unitario
+[x] #5 Historial de precio (ProductPriceHistory) cuando una compra cambia el costo
+    - Los 3 en: BusinessSearcher.Application/Features/Operations/PurchasingCommands.cs
+      (CreatePurchaseHandler). Ahora calcula costo ponderado + prorratea AssociatedExpenses entre
+      líneas por subtotal + registra ProductPriceHistory si cambia costo/venta.
+    - Se inyectó IProductPriceHistoryRepository en el handler (ya estaba registrado en DI).
+
+[x] #9 Terminales: conectar el CRUD ya existente a la UI
+    - Nuevo archivo: businesssearcher-frontend/src/components/dashboard/pages/ops/TerminalsPage.tsx
+    - Ruta /dashboard/ops/terminals + ítem "Terminales" en Sidebar.tsx
+    - PosPage.tsx: se agregó selector de Terminal (useTerminals), se preselecciona con
+      register.terminalId al abrir caja, y se envía terminalName en CreateOpsSale.
+
+[x] #10 Endpoint check-barcode + auto-add al carrito en POS
+    - El endpoint YA EXISTÍA en el backend (GET /api/v1/ops/products/barcode/{barcode},
+      CatalogControllers.cs línea 55) — el agente de análisis inicial no lo encontró porque buscó
+      en los controllers equivocados. Solo faltaba el frontend.
+    - Se agregó fetchProductByBarcode() en hooks/useOps.ts y se conectó en PosPage.tsx: al presionar
+      Enter en el buscador, intenta match exacto por barcode y agrega directo al carrito (flujo de
+      pistola lectora).
+
+[x] #4 Alta de producto nuevo "al vuelo" durante el registro de una compra (BACKEND + FRONTEND)
+    - Backend: nuevo DTO NewPurchaseProductDto en PurchasingInventoryDtos.cs; CreatePurchaseItemDto
+      ahora tiene ProductId opcional (Guid?) + NewProduct opcional. CreatePurchaseHandler resuelve:
+      si no hay ProductId, busca por barcode (dedup) o crea el producto nuevo con Product.Create().
+    - Frontend: opsTypes.ts (NewPurchaseProduct, CreateOpsPurchaseItem.productId ahora opcional +
+      newProduct), y PurchasesPage.tsx tiene botón "Producto nuevo" que agrega una línea "draft"
+      (sin product.id) que se envía como newProduct en el submit.
+
+[x] #6 Conversión/desglose de inventario — SOLO BACKEND, FALTA FRONTEND
+    - Domain: InventoryMovementType ahora tiene Ajuste = 5 (BusinessSearcher.Domain/.../Enums/OperationsEnums.cs)
+    - DTOs: ConvertInventoryItemDto, ConvertInventoryDto en PurchasingInventoryDtos.cs
+    - Application: ConvertInventoryCommand + ConvertInventoryHandler en InventoryCommands.cs
+      (consume N productos origen a su costo actual, produce 1 producto destino existente o nuevo
+      con costo promedio ponderado, genera movimientos tipo Ajuste en ambos sentidos)
+    - WebApi: POST /api/v1/ops/inventory/movements/convert en PurchasingInventoryControllers.cs
+      (roles Almacenero/JefeDeTurno)
+    - PENDIENTE: agregar hook useConvertInventory() en useOps.ts + UI en MovementsPage.tsx (o una
+      pestaña/diálogo nuevo "Conversión") para que el usuario arme la conversión (elegir productos
+      origen + cantidades, elegir/crear producto destino + cantidad producida).
+
+TODAVÍA NO EMPEZADOS (backend y frontend, de la lista de 14 gaps):
+
+[ ] #7 Edición y anulación (void) de una venta ya registrada
+    - Referencia en Leo: PUT /api/sales/:id y DELETE /api/sales/:id en server.ts líneas 2046-2162
+      (solo admin; reajusta stock old vs new, o restaura stock si se anula por completo).
+    - En BS_Solution: OpsSalesController (SalesCashControllers.cs) solo tiene GetAll/GetById/
+      Create/Refund. Faltaría UpdateSaleCommand/VoidSaleCommand.
+
+[ ] #8 Impresión de tickets/recibos
+    - No hay ningún componente de impresión ni endpoint de generación de ticket/PDF. Se puede
+      resolver 100% en frontend con un componente imprimible + window.print() (no requiere backend
+      necesariamente), agregándolo al detalle de venta en SalesPage.tsx (el diálogo ya tiene todos
+      los datos de la venta).
+
+[ ] #11 Feed de notificaciones operativas (stock bajo + cambios de precio recientes)
+    - Referencia en Leo: GET /api/notifications/check (server.ts 1848-1896).
+    - En BS ya existe GetInventoryReportQuery(LowStockOnly) para stock bajo, pero no hay un feed
+      combinado (stock bajo + cambios de precio en 24h) ni un endpoint de "notificaciones" para el
+      TPV (AlertsController.cs existente es para el feature "Radar" de clientes finales, NO para
+      esto). Habría que crear un nuevo query/endpoint en Operations.
+
+[ ] #12 Vincular cierre de caja (arqueo) con conteo físico de inventario del turno
+    - Referencia en Leo: registers.inventoryCountFinished, POST /api/registers/:id/inventory-finished
+      y .../inventory-progress (server.ts 3878-3890).
+    - En BS, CashRegister e InventoryCount existen pero son independientes; no hay campo/flujo que
+      exija o registre que se hizo un conteo antes de cerrar caja.
+
+[ ] #13 Vistas diferenciadas por rol operativo (cajero vs administrador)
+    - El dominio YA tiene 6 roles (OperationsRole: Administrador, Cajero, JefeDeTurno, Almacenero,
+      Comercial, Auditor — OperationsEnums.cs), pero el frontend usa las mismas páginas para todos
+      sin ocultar/adaptar acciones según rol (p.ej. anular venta, editar precios deberían ser solo
+      para JefeDeTurno/Administrador). Esto es principalmente trabajo de frontend: gating de UI
+      según el rol del usuario actual (ya viene en el JWT / useAuth()).
+
+[ ] #14 Store de configuración genérica clave-valor
+    - Referencia en Leo: GET/POST /api/settings/:key (server.ts 4040-4050) — tabla "settings"
+      genérica para flags/parámetros varios.
+    - En BS solo hay endpoints específicos (OpsExchangeRateController, OpsBusinessInfoController).
+      Sería una nueva entidad Setting (key, value, tenantId) + repo + controller CRUD simple.
+
+NOTA: el ítem #15 de la lista original (sincronización/backup multi-sucursal on-premise, Leo:
+/api/sync/* y /api/backup/*) se descartó — no aplica porque BS_Solution ya es multi-tenant en una
+sola base cloud, no instalaciones on-premise por sucursal. No implementar salvo que el usuario
+decida soportar despliegues on-premise.
+
+BUILDS VERIFICADOS EN ESTA SESIÓN (todos verdes con los cambios de arriba):
+- dotnet build BusinessSearcher.sln -c Debug  → Build succeeded (0 errores)
+- npx tsc --noEmit (en businesssearcher-frontend) → sin errores
+
+============================================================
+TAREA 3 — Notificación de admin: pago vencido (NO EMPEZADA)
+============================================================
+Pedido del usuario: "implementar en clientes un sistema de notificaciones para admin, donde avise
+si ya paso 1 mes desde el ultimo pago, recordar que cada mes tiene 28,29 30 o 31 dias dependiendo
+del mes o el año si es bisiesto."
+
+Puntos clave para el diseño:
+- "1 mes calendario" debe calcularse con aritmética de meses reales (usar DateTime.AddMonths(1) y
+  comparar con DateTime.UtcNow), NO con "30 días fijos" — así se respeta que un mes tenga 28, 29,
+  30 o 31 días (incluyendo años bisiestos), tal como pidió el usuario explícitamente.
+- Hay que decidir a qué "clientes" se refiere: probablemente los Tenants/negocios que pagan un
+  plan (Basic/Premium/Enterprise, ver Stripe en BusinessSearcher.WebApi/appsettings.json), no los
+  "Client" del bounded context Radar (que son consumidores finales de la app móvil, sin pagos).
+  → Revisar el modelo de Tenant/Subscription en BusinessSearcher.Domain para ver si ya existe un
+  campo de "último pago" o hay que agregarlo.
+- Diseño sugerido (a validar con el usuario):
+  1. Agregar/ubicar el campo `LastPaymentDate` (o similar) en el aggregate de Tenant/Subscription.
+  2. Un método de dominio tipo `bool IsPaymentOverdue(DateTime now) => now >= LastPaymentDate.AddMonths(1);`
+  3. Un query/job (o simplemente un query bajo demanda desde el panel de Admin) que liste los
+     tenants con pago vencido, para mostrarlo como notificación/badge en AdminPage.tsx.
+  4. Opcional: un job periódico (Hangfire/BackgroundService, revisar si el proyecto ya tiene algo
+     así) que genere una notificación real (ya existe sistema de Chat/notificaciones admin, ver
+     Chat:AdminEmail en appsettings.json) en vez de solo un query bajo demanda.
+- NADA de esto se implementó todavía — falta explorar el modelo de Tenant/Subscription antes de
+  diseñar el esquema final.
+
+============================================================
+OTRAS NOTAS DE CONTEXTO
+============================================================
+- Estructura de branches: se trabajó directo sobre `main` en los 3 repos, SIN commitear nada
+  todavía (todos los cambios de esta sesión están sin commit). Revisar `git status`/`git diff` en
+  cada repo antes de seguir, y decidir si commitear lo ya hecho antes de continuar con lo pendiente.
+- El repo F:\Proyectos\Food\FoodFinderApp\FoodFinderApp_New tiene un problema de "dubious
+  ownership" de git (usuario/SID distinto al dueño del .git) — no se pudo revisar su historial sin
+  ejecutar `git config --global --add safe.directory ...`, lo cual NO se hizo porque modifica config
+  global de git sin permiso explícito. Si hace falta revisar su historial, pedir confirmación antes.

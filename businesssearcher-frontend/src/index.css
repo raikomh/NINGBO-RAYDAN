@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Smooth scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(37, 99, 235, 0.25) transparent;
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(37, 99, 235, 0.25); border-radius: 99px; }
+
+/* Page transition helper */
+.page-enter {
+  animation: fadeUp 0.4s var(--spring) both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ── Login/Registro: dos paneles que se deslizan e intercambian de lado ──────
+   Pista de 200% de ancho con dos "slides" del ancho de la ventana: al pasar a
+   registro se desplaza -50%, así el formulario y el panel de color intercambian
+   lados con un movimiento continuo en vez de un corte seco. */
+.auth-viewport {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
+.auth-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  transition: background 0.95s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.auth-bg[data-mode='login'] {
+  background: linear-gradient(135deg, #0b1f4d 0%, #1e3a8a 45%, #7dd3fc 100%);
+}
+.auth-bg[data-mode='register'] {
+  background: linear-gradient(135deg, #9a3412 0%, #f59e0b 45%, #fde68a 100%);
+}
+.auth-track {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 200%;
+  min-height: 100vh;
+  transition: transform 0.95s var(--spring);
+  transform: translateX(0);
+  will-change: transform;
+}
+.auth-track[data-mode='register'] {
+  transform: translateX(-50%);
+}
+.auth-slide {
+  width: 50%;
+  min-height: 100vh;
+  flex-shrink: 0;
+}
+/* Igual que el brillo del botón, este deslizamiento NO se desactiva con
+   prefers-reduced-motion: es una decisión de producto para que la transición
+   se vea en todos los dispositivos. */
+
+/* ── Botón con borde luminoso animado ───────────────────────────────────────
+   Se envuelve el botón en .glow-btn porque los botones de MUI llevan
+   overflow:hidden (para el ripple) y recortarían el efecto.
+   El haz de luz gira rotando el propio elemento (transform), no una variable
+   CSS: así funciona en todos los navegadores sin depender de @property. */
+.glow-btn {
+  --glow-base: #1e3a8a;        /* anillo apagado (contrasta con la página blanca) */
+  --glow-1: #22d3ee;           /* cian vivo */
+  --glow-2: #a5f3fc;           /* núcleo del haz */
+  --glow-halo: rgba(34, 211, 238, 0.55);
+  position: relative;
+  display: block;
+  padding: 3px;                /* grosor del borde luminoso */
+  border-radius: 999px;        /* píldora */
+  overflow: hidden;            /* recorta el haz giratorio a la forma del botón */
+  isolation: isolate;
+  background: var(--glow-base);
+  box-shadow: 0 0 22px -6px var(--glow-halo);
+}
+.glow-btn--amber {
+  --glow-base: #92400e;
+  --glow-1: #fbbf24;
+  --glow-2: #fef3c7;
+  --glow-halo: rgba(245, 158, 11, 0.55);
+}
+/* La sombra propia del botón de MUI (elevation) cae sobre el anillo y apaga
+   el brillo: se anula para que el borde luminoso se vea limpio. */
+.glow-btn .MuiButton-root {
+  box-shadow: none !important;
+}
+.glow-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 140%;
+  aspect-ratio: 1;             /* cuadrado: cubre las esquinas al girar */
+  z-index: -1;
+  /* El centrado va aparte de la animación (propiedades independientes), para que
+     no dependa de que la animación arranque. */
+  translate: -50% -50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg, transparent 40deg,
+    var(--glow-1) 70deg, var(--glow-2) 90deg, var(--glow-1) 110deg,
+    transparent 140deg, transparent 360deg
+  );
+  animation: glow-btn-spin 5s linear infinite;
+}
+@keyframes glow-btn-spin {
+  from { rotate: 0deg; }
+  to   { rotate: 360deg; }
+}
+/* Al deshabilitarse (enviando el formulario) el brillo se apaga */
+.glow-btn:has(.Mui-disabled)::before { animation-play-state: paused; opacity: 0.4; }
+.glow-btn:has(.Mui-disabled) { box-shadow: none; }
+
+/* Nota: a diferencia del resto de animaciones del sitio, este brillo NO se
+   desactiva con prefers-reduced-motion. Es una decisión de producto: el efecto
+   debe verse en todos los dispositivos (PC y móvil). Se mantiene deliberadamente
+   pequeño y suave para minimizar la molestia a quien prefiere menos movimiento. */
+
+/* Impresión de recibos/tickets: solo se imprime el contenido marcado con .receipt-print-area */
+.receipt-print-area { display: none; }
+@media print {
+  body * { visibility: hidden; }
+  .receipt-print-area, .receipt-print-area * { visibility: visible; }
+  .receipt-print-area {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "profiles": {
+    "BusinessSearcher.WebApi": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:62559;http://localhost:62560"
+    },
+    "Neon": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Neon"
+      },
+      "applicationUrl": "https://localhost:62559;http://localhost:62560"
+    }
+  }
+}

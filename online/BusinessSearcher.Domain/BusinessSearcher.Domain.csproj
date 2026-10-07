@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>BusinessSearcher.Domain</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    REGLA DE CLEAN ARCHITECTURE: El Dominio NO debe depender de ningún
+    framework externo (ni EF Core, ni MediatR, ni nada). Solo .NET puro.
+  -->
+
+</Project>

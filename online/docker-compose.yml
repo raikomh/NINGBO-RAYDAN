@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+
+  # ── API ────────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: businesssearcher-api
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=business_searcher;Username=postgres;Password=postgres123
+      - Jwt__Secret=dev_secret_key_minimum_32_chars_long_change_in_prod
+      - Jwt__Issuer=BusinessSearcher.API
+      - Jwt__Audience=BusinessSearcher.Clients
+      - Jwt__ExpirationDays=1
+      - Email__SmtpHost=mailhog
+      - Email__SmtpPort=1025
+      - Email__SmtpUser=test@test.com
+      - Email__SmtpPassword=password
+      - Email__FromEmail=noreply@businesssearcher.com
+      - Email__FromName=BusinessSearcher Dev
+      - Frontend__DashboardUrl=http://localhost:3000
+      - Frontend__ResetPasswordUrl=http://localhost:3000/reset-password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - businesssearcher-network
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: businesssearcher-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: business_searcher
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - businesssearcher-network
+
+  # ── MailHog (email de prueba, solo desarrollo) ─────────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: businesssearcher-mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI para ver emails → http://localhost:8025
+    networks:
+      - businesssearcher-network
+
+volumes:
+  postgres_data:
+
+networks:
+  businesssearcher-network:
+    driver: bridge
