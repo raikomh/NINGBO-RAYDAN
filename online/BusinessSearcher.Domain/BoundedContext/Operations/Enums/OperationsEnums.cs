@@ -31,6 +31,8 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Enums
         JefeDeTurno   = 3,
         Almacenero    = 4,
         Comercial     = 5,
-        Auditor       = 6
+        Auditor       = 6,
+        /// <summary>Solo lectura; puede registrar y editar gestores.</summary>
+        Observador    = 7
     }
 }

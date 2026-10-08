@@ -150,8 +150,11 @@ export interface OpsSale {
   paymentMethod: string;
   paymentCurrency: string;
   status: string;
+  cashierId?: string;
+  cashierName?: string;
   registerId: string;
-  terminalName?: string;
+  warehouseName?: string;
+  managerCode?: string;
   items: OpsSaleItem[];
   payments: OpsSalePayment[];
 }
@@ -183,23 +186,56 @@ export interface CreateOpsSale {
   payments: CreateOpsSalePayment[];
   exchangeRate?: number;
   taxAmount?: number;
-  terminalName?: string;
+  managerCode?: string;
 }
+
+export interface OpsManager {
+  id: string;
+  code: string;
+  name: string;
+  idNumber: string;
+  municipality: string;
+  province: string;
+  phone: string;
+  isActive: boolean;
+}
+export type SaveOpsManager = Omit<OpsManager, 'id' | 'isActive'> & { isActive?: boolean };
 
 export interface UpdateOpsSale {
   items: CreateOpsSaleItem[];
 }
 
+export interface SalesImportPriceDiff {
+  rowNumber: number;
+  productName: string;
+  barcode?: string;
+  quantity: number;
+  systemPrice: number;
+  excelPrice: number;
+}
+
+export interface ImportSalesResult {
+  success: boolean;
+  needsPriceConfirmation: boolean;
+  importedCount: number;
+  pricesUpdatedCount: number;
+  priceDifferences: SalesImportPriceDiff[];
+  errors: string[];
+}
+
 export interface OpsCashRegister {
   id: string;
   warehouseId?: string;
-  terminalId?: string;
   openDate: string;
   closeDate?: string;
   initialAmount: number;
+  initialAmountUSD?: number;
   expectedAmount?: number;
+  expectedAmountUSD?: number;
   actualAmount?: number;
+  actualAmountUSD?: number;
   difference?: number;
+  differenceUSD?: number;
   status: 'Open' | 'Closed';
   salesCount: number;
   totalSales: number;
@@ -217,14 +253,6 @@ export interface OpsCashMovement {
   amount: number;
   currency: string;
   description?: string;
-}
-
-export interface OpsTerminal {
-  id: string;
-  name: string;
-  description?: string;
-  warehouseId?: string;
-  isActive: boolean;
 }
 
 export interface OpsExchangeRate {
@@ -252,7 +280,49 @@ export interface CreateOpsExpense {
   amountUSD?: number;
 }
 
-export type OpsRole = 'Administrador' | 'Cajero' | 'JefeDeTurno' | 'Almacenero' | 'Comercial' | 'Auditor';
+export type OpsRole = 'Administrador' | 'Cajero' | 'JefeDeTurno' | 'Almacenero' | 'Comercial' | 'Auditor' | 'Observador';
+
+// ── Roles y salarios ──
+export interface OpsRoleSalaryConfig {
+  role: OpsRole;
+  baseSalary: number;
+  salesPercentage: number;
+  isConfigured: boolean;
+}
+
+export interface SaveOpsRoleSalaryConfig {
+  baseSalary: number;
+  salesPercentage: number;
+}
+
+// ── Nómina (gasto de salario) ──
+export interface OpsPayrollWorkerLine {
+  workerId: string;
+  workerName: string;
+  role: OpsRole;
+  baseSalary: number;
+  minimoExento: number;
+  salesPercentage: number;
+  ventas: number;
+  comision: number;
+  salarioACobrar: number;
+}
+
+export interface OpsPayrollPreview {
+  from: string;
+  to: string;
+  minimoExento: number;
+  workers: OpsPayrollWorkerLine[];
+  total: number;
+}
+
+export interface RegisterOpsPayrollExpense {
+  from: string;
+  to: string;
+  workerIds?: string[];
+  description?: string;
+  amountUSD?: number;
+}
 
 export interface OpsUser {
   id: string;
@@ -324,9 +394,12 @@ export interface OpsPurchase {
   associatedExpenses: number;
   currency: string;
   status: string;
+  invoiceUrl?: string;
   date: string;
   items: OpsPurchaseItem[];
   purchaseRequestIds: string[];
+  cancellationReason?: string;
+  cancelledByUserId?: string;
 }
 
 export interface NewPurchaseProduct {
@@ -356,6 +429,22 @@ export interface CreateOpsPurchase {
   associatedExpenses?: number;
   exchangeRate?: number;
   purchaseRequestIds?: string[];
+}
+
+export interface UpdateOpsPurchaseItem {
+  productId: string;
+  quantity: number;
+  costPrice: number;
+  batchNumber?: string;
+  expirationDate?: string;
+  newSellPrice?: number;
+}
+
+export interface UpdateOpsPurchase {
+  items: UpdateOpsPurchaseItem[];
+  associatedExpenses?: number;
+  supplierId?: string;
+  invoiceUrl?: string;
 }
 
 export type MovementType = 'Entrada' | 'Salida' | 'Traslado' | 'Merma';
@@ -401,6 +490,7 @@ export interface OpsCountItem {
   systemQuantity: number;
   countedQuantity: number;
   difference: number;
+  audited: boolean;
 }
 
 export interface OpsInventoryCount {
@@ -459,12 +549,15 @@ export interface SalesReportRow {
   paymentMethod: string;
   currency: string;
   total: number;
+  totalUsd?: number;
   status: string;
 }
 export interface SalesReport {
   count: number;
   totalSales: number;
+  totalSalesUsd: number;
   totalRefunded: number;
+  totalRefundedUsd: number;
   rows: SalesReportRow[];
 }
 
@@ -499,25 +592,63 @@ export interface MonthlyDashboardRow {
   month: number;
   monthLabel: string;
   salesTotal: number;
+  salesTotalUsd: number;
   refundsTotal: number;
+  refundsTotalUsd: number;
   salesCount: number;
+  costOfGoodsSold: number;
+  costOfGoodsSoldUsd: number;
   purchasesTotal: number;
+  purchasesTotalUsd: number;
   purchasesCount: number;
   mermaCount: number;
   mermaValue: number;
+  mermaValueUsd: number;
   expensesTotal: number;
+  expensesTotalUsd: number;
   profit: number;
+  profitUsd: number;
 }
 export interface MonthlyDashboard {
   year: number;
   months: MonthlyDashboardRow[];
   yearSalesTotal: number;
+  yearSalesTotalUsd: number;
+  yearCostOfGoodsSold: number;
+  yearCostOfGoodsSoldUsd: number;
   yearPurchasesTotal: number;
+  yearPurchasesTotalUsd: number;
   yearExpensesTotal: number;
+  yearExpensesTotalUsd: number;
   yearMermaValue: number;
+  yearMermaValueUsd: number;
   yearProfit: number;
+  yearProfitUsd: number;
   previousYearProfit?: number;
+  previousYearProfitUsd?: number;
   profitChangePercent?: number;
+  exchangeRate?: number;
+}
+
+export interface DashboardSummary {
+  from: string;
+  to: string;
+  salesTotal: number;
+  salesTotalUsd: number;
+  salesCount: number;
+  refundsTotal: number;
+  refundsTotalUsd: number;
+  costOfGoodsSold: number;
+  costOfGoodsSoldUsd: number;
+  purchasesTotal: number;
+  purchasesTotalUsd: number;
+  expensesTotal: number;
+  expensesTotalUsd: number;
+  mermaValue: number;
+  mermaValueUsd: number;
+  profit: number;
+  profitUsd: number;
+  exchangeRate?: number;
 }
 
 // ── Configuración clave-valor ──
@@ -533,4 +664,43 @@ export interface OpsNotification {
   message: string;
   date: string;
   productId?: string;
+}
+
+// ── Sincronización Local ↔ Online (solo modo Local; el push lo puede disparar
+// cualquier trabajador, el pull es exclusivo del Administrador) ──
+export interface SyncPushResult {
+  itemsSent: number;
+  itemsAccepted: number;
+  conflicts: string[];
+}
+export interface SyncPullResult {
+  itemsReceived: number;
+  itemsAccepted: number;
+  conflicts: string[];
+}
+export interface SyncHistoryEntry {
+  id: string;
+  direction: string;
+  status: string;
+  startedAt: string;
+  completedAt?: string;
+  itemsSent: number;
+  itemsAccepted: number;
+  errorMessage?: string;
+  counterpartyUrl?: string;
+}
+// Se genera desde el backend Online (ruta manual/avanzada; el flujo normal es "Conectar" abajo,
+// que no requiere copiar ni pegar nada).
+export interface SyncApiKeyResult {
+  apiKey: string;
+}
+// Emparejamiento automático: el dueño entrega la URL online + su email/contraseña normales (no
+// una API key) y el backend Local hace el resto (login + generar key + guardarla).
+export interface SyncConnectionStatus {
+  isConnected: boolean;
+  onlineBaseUrl?: string;
+  businessName?: string;
+  // true cuando el registro dejó una contraseña cifrada pendiente de emparejamiento automático
+  // (OnlinePairingRetryBackgroundService) y todavía no se obtuvo la API key real.
+  autoRetryPending?: boolean;
 }

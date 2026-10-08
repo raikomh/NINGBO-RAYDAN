@@ -61,7 +61,7 @@ export default function PurchaseRequestsPage() {
                   <TableCell align="right">{r.minStock}</TableCell>
                   <TableCell align="right">
                     {editId === r.id ? (
-                      <TextField size="small" type="number" value={editQty} onChange={(e) => setEditQty(Number(e.target.value))} sx={{ width: 90 }} />
+                      <TextField size="small" type="number" value={editQty || ''} onChange={(e) => setEditQty(e.target.value === '' ? 0 : Number(e.target.value))} sx={{ width: 90 }} />
                     ) : r.requestedQuantity}
                   </TableCell>
                   <TableCell><Chip size="small" color={STATUS_COLOR[r.status]} label={STATUS_LABEL[r.status] ?? r.status} /></TableCell>

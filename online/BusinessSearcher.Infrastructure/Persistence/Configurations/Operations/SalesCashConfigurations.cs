@@ -21,7 +21,8 @@ namespace BusinessSearcher.Infrastructure.Persistence.Configurations.Operations
             b.Property(x => x.PaymentMethod).HasConversion<string>().HasMaxLength(20);
             b.Property(x => x.PaymentCurrency).HasConversion<string>().HasMaxLength(3);
             b.Property(x => x.Status).HasConversion<string>().HasMaxLength(15);
-            b.Property(x => x.TerminalName).HasMaxLength(150);
+            b.Property(x => x.WarehouseName).HasMaxLength(150);
+            b.Property(x => x.ManagerCode).HasMaxLength(30);
             b.HasIndex(x => x.TenantId);
             b.HasIndex(x => new { x.TenantId, x.Date });
             b.HasIndex(x => x.RegisterId);
@@ -67,20 +68,6 @@ namespace BusinessSearcher.Infrastructure.Persistence.Configurations.Operations
             b.Property(x => x.CashTendered).HasColumnType("decimal(18,2)");
             b.Property(x => x.Change).HasColumnType("decimal(18,2)");
             b.Property(x => x.TransactionId).HasMaxLength(100);
-            b.Ignore(x => x.DomainEvents);
-        }
-    }
-
-    public class TerminalConfiguration : IEntityTypeConfiguration<Terminal>
-    {
-        public void Configure(EntityTypeBuilder<Terminal> b)
-        {
-            b.ToTable("op_terminals");
-            b.HasKey(x => x.Id);
-            b.Property(x => x.Id).ValueGeneratedNever();
-            b.Property(x => x.Name).HasMaxLength(150).IsRequired();
-            b.Property(x => x.Description).HasMaxLength(500);
-            b.HasIndex(x => x.TenantId);
             b.Ignore(x => x.DomainEvents);
         }
     }

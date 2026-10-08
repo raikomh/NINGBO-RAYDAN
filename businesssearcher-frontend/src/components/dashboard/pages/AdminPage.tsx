@@ -9,13 +9,16 @@ import {
 } from '@mui/material';
 import {
   Block, CheckCircle, Delete, Refresh, People, Business,
-  Chat as ChatIcon, Send as SendIcon, HowToReg, Star, StarBorder, MoneyOff,
-  CardGiftcard, Storefront,
+  Chat as ChatIcon, Send as SendIcon, HowToReg, Star, StarBorder, MoneyOff, Paid,
+  EmojiEvents, LocalAtm, Schedule as ScheduleIcon, Phone, Close,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/apiClient';
-import type { TenantAdmin, AdminStats, ClientAdmin, OverdueTenant, MarketingVisitSummary } from '@/lib/types';
-import ReferralsPanel from './ReferralsPanel';
+import type {
+  TenantAdmin, AdminStats, ClientAdmin, OverdueTenant, MarketingVisitSummary,
+  ReferralPayoutAdmin, ReferralLeaderboard, MonthlySettlementReceipt,
+  AdminPaymentClaim, ExpiringTenant, AdminPremiumClaim, ExpiringClient,
+} from '@/lib/types';
 import MipymeReferralsPanel from './MipymeReferralsPanel';
 
 const STATUS_OPTS = ['', 'Active', 'Suspended'];
@@ -54,7 +57,29 @@ function useMarketingVisits() {
   });
 }
 
-function useAdminTenants(params: { status?: string; search?: string; page?: number; isApproved?: boolean }) {
+function useExpiringSoon(days = 3) {
+  return useQuery<ExpiringTenant[]>({
+    queryKey: ['admin', 'expiring-soon', days],
+    queryFn: async () => {
+      const res = await api.get('/api/v1/admin/tenants/expiring-soon', { params: { days } });
+      const payload = res.data?.data ?? res.data;
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
+}
+
+function usePaymentClaims() {
+  return useQuery<AdminPaymentClaim[]>({
+    queryKey: ['admin', 'payment-claims'],
+    queryFn: async () => {
+      const res = await api.get('/api/v1/admin/tenants/payment-claims');
+      const payload = res.data?.data ?? res.data;
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
+}
+
+function useAdminTenants(params: { status?: string; search?: string; page?: number; pageSize?: number; isApproved?: boolean }) {
   return useQuery<{ data: TenantAdmin[]; total?: number }>({
     queryKey: ['admin', 'tenants', params],
     queryFn: async () => {
@@ -111,6 +136,236 @@ function SuspendDialog({ open, tenant, onClose }: SuspendDialogProps) {
   );
 }
 
+interface RenewDialogProps {
+  open: boolean;
+  tenant: { id: string; businessName: string } | null;
+  onClose: () => void;
+}
+
+function RenewDialog({ open, tenant, onClose }: RenewDialogProps) {
+  const qc = useQueryClient();
+  const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState('COP');
+  const [reference, setReference] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => api.post(`/api/v1/admin/tenants/${tenant?.id}/renew`, {
+      amount: Number(amount), currency, reference: reference || null,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin'] });
+      setAmount(''); setReference('');
+      onClose();
+    },
+  });
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Renovar suscripción — {tenant?.businessName}</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          Registra el pago recibido. Extiende la suscripción 30 días desde hoy y reactiva la cuenta
+          si estaba suspendida o inactiva — si el dueño tiene una instalación Local emparejada, se
+          desbloquea sola apenas sincronice.
+        </Typography>
+        <Box display="flex" gap={2} flexWrap="wrap" sx={{ mt: 1 }}>
+          <TextField
+            label="Monto" type="number" value={amount}
+            onChange={(e) => setAmount(e.target.value)} sx={{ flex: 2, minWidth: 140 }}
+          />
+          <TextField
+            label="Moneda" value={currency}
+            onChange={(e) => setCurrency(e.target.value)} sx={{ flex: 1, minWidth: 100 }}
+          />
+        </Box>
+        <TextField
+          fullWidth label="Referencia (opcional)" value={reference}
+          onChange={(e) => setReference(e.target.value)} sx={{ mt: 2 }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancelar</Button>
+        <Button
+          variant="contained" color="success"
+          disabled={!amount || Number(amount) <= 0 || mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
+          {mutation.isPending ? 'Renovando...' : 'Renovar 30 días'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+const CLAIM_STATUS_LABEL: Record<string, string> = {
+  Pending: '⏳ Pendiente',
+  Approved: '✅ Recibido',
+  Rejected: '❌ Rechazado',
+};
+
+interface ReviewClaimDialogProps {
+  open: boolean;
+  claim: AdminPaymentClaim | null;
+  action: 'approve' | 'reject' | null;
+  onClose: () => void;
+}
+
+function ReviewClaimDialog({ open, claim, action, onClose }: ReviewClaimDialogProps) {
+  const qc = useQueryClient();
+  const [note, setNote] = useState('');
+  const isApprove = action === 'approve';
+
+  const mutation = useMutation({
+    mutationFn: () => api.post(
+      `/api/v1/admin/tenants/${claim?.tenantId}/payment-claims/${claim?.claimId}/${action}`,
+      { note: note || null },
+    ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin'] });
+      setNote('');
+      onClose();
+    },
+  });
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>{isApprove ? 'Aprobar pago' : 'Rechazar reporte'} — {claim?.businessName}</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          {isApprove
+            ? `Se registrará el pago de ${claim?.amount} ${claim?.currency} y la suscripción se extenderá 30 días desde hoy.`
+            : 'El reporte quedará marcado como rechazado. No se registra ningún pago.'}
+        </Typography>
+        <Box display="flex" gap={3} mb={2} flexWrap="wrap">
+          <Typography variant="body2"><b>Teléfono:</b> {claim?.phoneNumber}</Typography>
+          <Typography variant="body2"><b>Comprobante:</b> {claim?.proofReference}</Typography>
+        </Box>
+        <TextField
+          fullWidth label="Nota (opcional)" value={note}
+          onChange={(e) => setNote(e.target.value)} multiline rows={2}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancelar</Button>
+        <Button
+          variant="contained" color={isApprove ? 'success' : 'error'}
+          disabled={mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
+          {mutation.isPending ? 'Guardando...' : isApprove ? 'Aprobar y renovar' : 'Rechazar'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function PaymentClaimsPanel() {
+  const { data: claims, isLoading } = usePaymentClaims();
+  const [reviewClaim, setReviewClaim] = useState<{ claim: AdminPaymentClaim; action: 'approve' | 'reject' } | null>(null);
+
+  const list = claims ?? [];
+
+  return (
+    <Card variant="outlined" sx={{ mt: 3, borderRadius: 2 }}>
+      <CardContent>
+        <Typography variant="subtitle2" fontWeight={700} mb={1.5}>
+          Pagos reportados por los negocios
+        </Typography>
+        {isLoading ? (
+          <Box display="flex" justifyContent="center" py={4}><CircularProgress size={28} /></Box>
+        ) : list.length === 0 ? (
+          <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+            Todavía no hay reportes de pago.
+          </Typography>
+        ) : (
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>#</TableCell>
+                  <TableCell>Fecha</TableCell>
+                  <TableCell>Usuario</TableCell>
+                  <TableCell>Teléfono</TableCell>
+                  <TableCell>Monto</TableCell>
+                  <TableCell>Comprobante</TableCell>
+                  <TableCell>Estado</TableCell>
+                  <TableCell>Fecha Activación</TableCell>
+                  <TableCell>Vence (30 días)</TableCell>
+                  <TableCell align="right">Acciones</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {list.map((c, i) => (
+                  <TableRow key={c.claimId} hover>
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell>{new Date(c.requestedAt).toLocaleDateString('es-ES')}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={600}>{c.businessName}</Typography>
+                      <Typography variant="caption" color="text.secondary">{c.email}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <Phone fontSize="inherit" color="action" />
+                        {c.phoneNumber}
+                      </Box>
+                    </TableCell>
+                    <TableCell>{c.amount} {c.currency}</TableCell>
+                    <TableCell>
+                      <Tooltip title={c.proofReference}>
+                        <Chip
+                          size="small"
+                          label={CLAIM_STATUS_LABEL[c.claimStatus] ?? c.claimStatus}
+                          color={c.claimStatus === 'Approved' ? 'success' : c.claimStatus === 'Rejected' ? 'error' : 'warning'}
+                          variant={c.claimStatus === 'Pending' ? 'outlined' : 'filled'}
+                        />
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small" label={c.isSubscriptionActive ? 'Activo' : 'Inactivo'}
+                        color={c.isSubscriptionActive ? 'success' : 'default'} variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>{c.lastPaymentDate ? new Date(c.lastPaymentDate).toLocaleDateString('es-ES') : '—'}</TableCell>
+                    <TableCell>{c.nextPaymentDate ? new Date(c.nextPaymentDate).toLocaleDateString('es-ES') : '—'}</TableCell>
+                    <TableCell align="right">
+                      {c.claimStatus === 'Pending' ? (
+                        <Box display="flex" justifyContent="flex-end" gap={0.5}>
+                          <Tooltip title="Aprobar (registra el pago y renueva 30 días)">
+                            <IconButton size="small" color="success" onClick={() => setReviewClaim({ claim: c, action: 'approve' })}>
+                              <CheckCircle fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Rechazar">
+                            <IconButton size="small" color="error" onClick={() => setReviewClaim({ claim: c, action: 'reject' })}>
+                              <Close fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          {c.reviewedAt ? new Date(c.reviewedAt).toLocaleDateString('es-ES') : '—'}
+                        </Typography>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </CardContent>
+
+      <ReviewClaimDialog
+        open={!!reviewClaim}
+        claim={reviewClaim?.claim ?? null}
+        action={reviewClaim?.action ?? null}
+        onClose={() => setReviewClaim(null)}
+      />
+    </Card>
+  );
+}
+
 function TenantsPanel() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('');
@@ -118,9 +373,11 @@ function TenantsPanel() {
   const [searchInput, setSearchInput] = useState('');
   const [pendingOnly, setPendingOnly] = useState(false);
   const [suspendTenant, setSuspendTenant] = useState<TenantAdmin | null>(null);
+  const [renewTenant, setRenewTenant] = useState<TenantAdmin | null>(null);
 
   const { data: stats, isLoading: statsLoading } = useAdminStats();
   const { data: overdue } = useOverduePayments();
+  const { data: expiringSoon } = useExpiringSoon(3);
   const { data: visits } = useMarketingVisits();
   const { data: tenantsData, isLoading, isError } = useAdminTenants({
     status: statusFilter || undefined,
@@ -158,6 +415,26 @@ function TenantsPanel() {
                 <ListItemText
                   primary={`${t.businessName} (${t.email})`}
                   secondary={`Último pago: ${new Date(t.lastPaymentDate).toLocaleDateString()} — ${t.daysOverdue} días atrasado`}
+                  primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                  secondaryTypographyProps={{ variant: 'caption' }}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Alert>
+      )}
+
+      {!!expiringSoon?.length && (
+        <Alert severity="info" icon={<ScheduleIcon />} sx={{ mb: 3 }}>
+          <Typography variant="body2" fontWeight={700} mb={0.5}>
+            {expiringSoon.length} negocio{expiringSoon.length !== 1 ? 's' : ''} con la suscripción por vencer en los próximos 3 días
+          </Typography>
+          <List dense disablePadding>
+            {expiringSoon.map((t) => (
+              <ListItem key={t.tenantId} disableGutters sx={{ py: 0.25 }}>
+                <ListItemText
+                  primary={`${t.businessName} (${t.email})`}
+                  secondary={`Vence: ${new Date(t.nextPaymentDate).toLocaleDateString('es-ES')} — en ${t.daysUntilExpiry} día${t.daysUntilExpiry !== 1 ? 's' : ''}`}
                   primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
                   secondaryTypographyProps={{ variant: 'caption' }}
                 />
@@ -278,9 +555,11 @@ function TenantsPanel() {
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>Negocio</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Teléfono</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Plan</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Suscripción</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Vence</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Registro</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>
               </TableRow>
@@ -288,7 +567,7 @@ function TenantsPanel() {
             <TableBody>
               {tenants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                     No se encontraron tenants
                   </TableCell>
                 </TableRow>
@@ -303,6 +582,9 @@ function TenantsPanel() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">{tenant.email}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">{tenant.phoneNumber ?? '—'}</Typography>
                     </TableCell>
                     <TableCell>
                       <Chip label={tenant.plan} size="small" variant="outlined" />
@@ -329,6 +611,11 @@ function TenantsPanel() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="caption" color="text.secondary">
+                        {tenant.nextPaymentDate ? new Date(tenant.nextPaymentDate).toLocaleDateString('es-ES') : '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary">
                         {tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString('es-ES') : '—'}
                       </Typography>
                     </TableCell>
@@ -346,6 +633,11 @@ function TenantsPanel() {
                             </IconButton>
                           </Tooltip>
                         )}
+                        <Tooltip title="Renovar (registrar pago, extiende 30 días)">
+                          <IconButton size="small" color="success" onClick={() => setRenewTenant(tenant)}>
+                            <Paid fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                         {tenant.status === 'Active' ? (
                           <Tooltip title="Suspender">
                             <IconButton size="small" color="warning" onClick={() => setSuspendTenant(tenant)}>
@@ -393,6 +685,152 @@ function TenantsPanel() {
         tenant={suspendTenant}
         onClose={() => setSuspendTenant(null)}
       />
+      <RenewDialog
+        open={!!renewTenant}
+        tenant={renewTenant}
+        onClose={() => setRenewTenant(null)}
+      />
+
+      <PaymentClaimsPanel />
+    </Box>
+  );
+}
+
+// ── Cuentas bloqueadas (impago o suspendidas) ────────────────────────────────
+// Vista curada de tenants a los que SubscriptionEnforcementMiddleware les está
+// devolviendo 402 en todas sus operaciones. La fuente de verdad es isSubscriptionActive
+// del listado general: overdue-payments por sí sola NO alcanza, porque exige
+// LastPaymentDate (queda vacía para un tenant que nunca pagó y se le venció el
+// período inicial de Trial — bloqueado igual, pero invisible ahí). Se excluyen
+// Inactive/Deleted: esos ya fueron dados de baja a propósito, no son "reactivables".
+interface BlockedAccountRow {
+  id: string;
+  businessName: string;
+  email: string;
+  reason: 'overdue' | 'suspended';
+  detail: string;
+}
+
+function BlockedAccountsPanel() {
+  const qc = useQueryClient();
+  const [renewTenant, setRenewTenant] = useState<{ id: string; businessName: string } | null>(null);
+
+  const { data: overdue } = useOverduePayments();
+  const { data: tenantsData, isLoading } = useAdminTenants({ pageSize: 100 });
+
+  const activateMutation = useMutation({
+    mutationFn: (tenantId: string) => api.post(`/api/v1/admin/tenants/${tenantId}/activate`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin'] }),
+  });
+
+  const overdueByTenantId = new Map((overdue ?? []).map((t) => [t.tenantId, t]));
+
+  const rows: BlockedAccountRow[] = (tenantsData?.data ?? [])
+    .filter((t) => t.isApproved && !t.isSubscriptionActive && t.status !== 'Inactive' && t.status !== 'Deleted')
+    .map((t) => {
+      const od = overdueByTenantId.get(t.id);
+      const isSuspended = t.status === 'Suspended';
+      return {
+        id: t.id,
+        businessName: t.businessName,
+        email: t.email,
+        reason: isSuspended ? ('suspended' as const) : ('overdue' as const),
+        detail: od
+          ? `Último pago: ${new Date(od.lastPaymentDate).toLocaleDateString('es-ES')} — ${od.daysOverdue} días atrasado`
+          : isSuspended
+            ? 'Suspendida manualmente por un admin'
+            : 'Sin pagos registrados: venció el período inicial sin renovar',
+      };
+    });
+
+  return (
+    <Box>
+      <Alert severity="info" sx={{ mb: 3 }}>
+        Tenants a los que el sistema les está bloqueando TODAS las operaciones (respuesta 402,
+        ver SubscriptionEnforcementMiddleware) por atraso de pago o por suspensión manual.
+        "Renovar" registra el pago y reactiva — es la única acción que también extiende la
+        próxima fecha de pago, así que úsala cuando el motivo sea impago. Si el dueño tiene una
+        instalación Local emparejada, se desbloquea sola en cuanto sincronice.
+      </Alert>
+
+      {isLoading ? (
+        <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>
+      ) : rows.length === 0 ? (
+        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
+          <Typography variant="body2" color="text.secondary">No hay cuentas bloqueadas ahora mismo.</Typography>
+        </Paper>
+      ) : (
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>Negocio</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Motivo</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Detalle</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.id} hover>
+                  <TableCell>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Business fontSize="small" color="action" />
+                      <Typography variant="body2" fontWeight={600}>{row.businessName}</Typography>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">{row.email}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={row.reason === 'overdue' ? 'Pago atrasado' : 'Suspendida'}
+                      size="small"
+                      color="error"
+                      icon={row.reason === 'overdue' ? <MoneyOff fontSize="small" /> : <Block fontSize="small" />}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption" color="text.secondary">{row.detail}</Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Box display="flex" justifyContent="flex-end" gap={0.5}>
+                      <Tooltip title="Renovar (registrar pago, extiende 30 días y reactiva)">
+                        <IconButton
+                          size="small"
+                          color="success"
+                          onClick={() => setRenewTenant({ id: row.id, businessName: row.businessName })}
+                        >
+                          <Paid fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {row.reason === 'suspended' && (
+                        <Tooltip title="Activar sin registrar pago (solo si la suspensión no fue por impago)">
+                          <IconButton
+                            size="small"
+                            color="warning"
+                            disabled={activateMutation.isPending}
+                            onClick={() => activateMutation.mutate(row.id)}
+                          >
+                            <CheckCircle fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      <RenewDialog
+        open={!!renewTenant}
+        tenant={renewTenant}
+        onClose={() => setRenewTenant(null)}
+      />
     </Box>
   );
 }
@@ -413,6 +851,189 @@ function useAdminClients(params: { search?: string; page?: number; isApproved?: 
   });
 }
 
+function useExpiringClients(days = 3) {
+  return useQuery<ExpiringClient[]>({
+    queryKey: ['admin', 'clients', 'expiring-soon', days],
+    queryFn: async () => {
+      const res = await api.get('/api/v1/admin/clients/expiring-soon', { params: { days } });
+      const payload = res.data?.data ?? res.data;
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
+}
+
+function usePremiumClaims() {
+  return useQuery<AdminPremiumClaim[]>({
+    queryKey: ['admin', 'clients', 'premium-claims'],
+    queryFn: async () => {
+      const res = await api.get('/api/v1/admin/clients/premium-claims');
+      const payload = res.data?.data ?? res.data;
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
+}
+
+interface ReviewPremiumClaimDialogProps {
+  open: boolean;
+  claim: AdminPremiumClaim | null;
+  action: 'approve' | 'reject' | null;
+  onClose: () => void;
+}
+
+function ReviewPremiumClaimDialog({ open, claim, action, onClose }: ReviewPremiumClaimDialogProps) {
+  const qc = useQueryClient();
+  const [note, setNote] = useState('');
+  const isApprove = action === 'approve';
+
+  const mutation = useMutation({
+    mutationFn: () => api.post(
+      `/api/v1/admin/clients/${claim?.clientId}/premium-claims/${claim?.claimId}/${action}`,
+      { note: note || null },
+    ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'clients'] });
+      setNote('');
+      onClose();
+    },
+  });
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>{isApprove ? 'Aprobar pago' : 'Rechazar reporte'} — {claim?.fullName}</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          {isApprove
+            ? `Se registrará el pago de ${claim?.amount} ${claim?.currency} y el Premium se extenderá 30 días desde hoy.`
+            : 'El reporte quedará marcado como rechazado. No se concede Premium.'}
+        </Typography>
+        <Box display="flex" gap={3} mb={2} flexWrap="wrap">
+          <Typography variant="body2"><b>Teléfono:</b> {claim?.phoneNumber}</Typography>
+          <Typography variant="body2"><b>Comprobante:</b> {claim?.proofReference}</Typography>
+        </Box>
+        <TextField
+          fullWidth label="Nota (opcional)" value={note}
+          onChange={(e) => setNote(e.target.value)} multiline rows={2}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancelar</Button>
+        <Button
+          variant="contained" color={isApprove ? 'success' : 'error'}
+          disabled={mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
+          {mutation.isPending ? 'Guardando...' : isApprove ? 'Aprobar y extender' : 'Rechazar'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function PremiumClaimsPanel() {
+  const { data: claims, isLoading } = usePremiumClaims();
+  const [reviewClaim, setReviewClaim] = useState<{ claim: AdminPremiumClaim; action: 'approve' | 'reject' } | null>(null);
+
+  const list = claims ?? [];
+
+  return (
+    <Card variant="outlined" sx={{ mt: 3, borderRadius: 2 }}>
+      <CardContent>
+        <Typography variant="subtitle2" fontWeight={700} mb={1.5}>
+          Pagos de Premium reportados por los clientes
+        </Typography>
+        {isLoading ? (
+          <Box display="flex" justifyContent="center" py={4}><CircularProgress size={28} /></Box>
+        ) : list.length === 0 ? (
+          <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+            Todavía no hay reportes de pago.
+          </Typography>
+        ) : (
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>#</TableCell>
+                  <TableCell>Fecha</TableCell>
+                  <TableCell>Usuario</TableCell>
+                  <TableCell>Teléfono</TableCell>
+                  <TableCell>Monto</TableCell>
+                  <TableCell>Comprobante</TableCell>
+                  <TableCell>Plan</TableCell>
+                  <TableCell>Vence</TableCell>
+                  <TableCell align="right">Acciones</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {list.map((c, i) => (
+                  <TableRow key={c.claimId} hover>
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell>{new Date(c.requestedAt).toLocaleDateString('es-ES')}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={600}>{c.fullName}</Typography>
+                      <Typography variant="caption" color="text.secondary">{c.email}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <Phone fontSize="inherit" color="action" />
+                        {c.phoneNumber}
+                      </Box>
+                    </TableCell>
+                    <TableCell>{c.amount} {c.currency}</TableCell>
+                    <TableCell>
+                      <Tooltip title={c.proofReference}>
+                        <Chip
+                          size="small"
+                          label={CLAIM_STATUS_LABEL[c.claimStatus] ?? c.claimStatus}
+                          color={c.claimStatus === 'Approved' ? 'success' : c.claimStatus === 'Rejected' ? 'error' : 'warning'}
+                          variant={c.claimStatus === 'Pending' ? 'outlined' : 'filled'}
+                        />
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small" label={c.plan}
+                        color={c.plan === 'Premium' ? 'secondary' : 'default'} variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>{c.premiumUntil ? new Date(c.premiumUntil).toLocaleDateString('es-ES') : '—'}</TableCell>
+                    <TableCell align="right">
+                      {c.claimStatus === 'Pending' ? (
+                        <Box display="flex" justifyContent="flex-end" gap={0.5}>
+                          <Tooltip title="Aprobar (extiende Premium 30 días)">
+                            <IconButton size="small" color="success" onClick={() => setReviewClaim({ claim: c, action: 'approve' })}>
+                              <CheckCircle fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Rechazar">
+                            <IconButton size="small" color="error" onClick={() => setReviewClaim({ claim: c, action: 'reject' })}>
+                              <Close fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          {c.reviewedAt ? new Date(c.reviewedAt).toLocaleDateString('es-ES') : '—'}
+                        </Typography>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </CardContent>
+
+      <ReviewPremiumClaimDialog
+        open={!!reviewClaim}
+        claim={reviewClaim?.claim ?? null}
+        action={reviewClaim?.action ?? null}
+        onClose={() => setReviewClaim(null)}
+      />
+    </Card>
+  );
+}
+
 function ClientsPanel() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -423,6 +1044,7 @@ function ClientsPanel() {
     search: search || undefined,
     isApproved: pendingOnly ? false : undefined,
   });
+  const { data: expiringSoon } = useExpiringClients(3);
 
   const approveMutation = useMutation({
     mutationFn: (clientId: string) => api.post(`/api/v1/admin/clients/${clientId}/approve`),
@@ -453,6 +1075,26 @@ function ClientsPanel() {
 
   return (
     <Box>
+      {!!expiringSoon?.length && (
+        <Alert severity="info" icon={<ScheduleIcon />} sx={{ mb: 3 }}>
+          <Typography variant="body2" fontWeight={700} mb={0.5}>
+            {expiringSoon.length} cliente{expiringSoon.length !== 1 ? 's' : ''} Premium con el período por vencer en los próximos 3 días
+          </Typography>
+          <List dense disablePadding>
+            {expiringSoon.map((c) => (
+              <ListItem key={c.clientId} disableGutters sx={{ py: 0.25 }}>
+                <ListItemText
+                  primary={`${c.fullName} (${c.email})`}
+                  secondary={`Vence: ${new Date(c.premiumUntil).toLocaleDateString('es-ES')} — en ${c.daysUntilExpiry} día${c.daysUntilExpiry !== 1 ? 's' : ''}`}
+                  primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                  secondaryTypographyProps={{ variant: 'caption' }}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Alert>
+      )}
+
       <Box display="flex" gap={2} mb={3} flexWrap="wrap" alignItems="center">
         <TextField
           size="small"
@@ -485,8 +1127,10 @@ function ClientsPanel() {
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>Nombre</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Teléfono</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Plan</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Vence</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Reputación</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Registro</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>
@@ -495,7 +1139,7 @@ function ClientsPanel() {
             <TableBody>
               {clients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                     No se encontraron clientes
                   </TableCell>
                 </TableRow>
@@ -510,6 +1154,9 @@ function ClientsPanel() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">{client.email}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">{client.phoneNumber ?? '—'}</Typography>
                     </TableCell>
                     <TableCell>
                       <Box display="flex" alignItems="center" gap={0.5} flexWrap="wrap">
@@ -530,6 +1177,11 @@ function ClientsPanel() {
                       ) : (
                         <Chip label="Pendiente aprobación" size="small" color="warning" variant="outlined" />
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary">
+                        {client.premiumUntil ? new Date(client.premiumUntil).toLocaleDateString('es-ES') : '—'}
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">{client.reputationScore}</Typography>
@@ -613,6 +1265,218 @@ function ClientsPanel() {
                   </TableRow>
                 ))
               )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      <PremiumClaimsPanel />
+    </Box>
+  );
+}
+
+// ── Referidos (recompensa en CUP) ───────────────────────────────────────────
+
+function useReferralPayouts() {
+  return useQuery<ReferralPayoutAdmin[]>({
+    queryKey: ['admin', 'referrals', 'payouts'],
+    queryFn: async () => {
+      const res = await api.get('/api/v1/admin/referrals/payouts');
+      const payload = res.data?.data ?? res.data;
+      return Array.isArray(payload) ? payload : [];
+    },
+  });
+}
+
+function useReferralLeaderboard() {
+  return useQuery<ReferralLeaderboard>({
+    queryKey: ['admin', 'referrals', 'leaderboard'],
+    queryFn: async () => {
+      const res = await api.get('/api/v1/admin/referrals/leaderboard');
+      return res.data?.data ?? res.data;
+    },
+  });
+}
+
+function ReferralsPanel() {
+  const qc = useQueryClient();
+  const [closeResult, setCloseResult] = useState<MonthlySettlementReceipt | null>(null);
+  const [closeError, setCloseError] = useState<string | null>(null);
+
+  const { data: payouts, isLoading: payoutsLoading, isError: payoutsError } = useReferralPayouts();
+  const { data: leaderboard, isLoading: leaderboardLoading } = useReferralLeaderboard();
+
+  const settleMutation = useMutation({
+    mutationFn: (clientId: string) => api.post(`/api/v1/admin/referrals/${clientId}/settle-payout`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'referrals', 'payouts'] }),
+  });
+
+  const closeMonthMutation = useMutation({
+    mutationFn: () => api.post('/api/v1/admin/referrals/close-month'),
+    onSuccess: (res) => {
+      setCloseError(null);
+      setCloseResult((res.data?.data ?? res.data) as MonthlySettlementReceipt);
+      qc.invalidateQueries({ queryKey: ['admin', 'referrals'] });
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? 'No se pudo cerrar la competencia mensual.';
+      setCloseError(message);
+    },
+  });
+
+  const monthLabel = leaderboard
+    ? new Date(leaderboard.year, leaderboard.month - 1, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+    : '';
+
+  return (
+    <Box>
+      {closeResult && (
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setCloseResult(null)}>
+          {closeResult.winnerClientId
+            ? `${closeResult.winnerName} ganó ${closeResult.prizeAmount} CUP (${closeResult.totalValidReferrals} referidos válidos en ${closeResult.month}/${closeResult.year}).`
+            : `Nadie tuvo referidos válidos en ${closeResult.month}/${closeResult.year}: nada que premiar.`}
+        </Alert>
+      )}
+      {closeError && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setCloseError(null)}>{closeError}</Alert>
+      )}
+
+      <Card variant="outlined" sx={{ mb: 3, borderRadius: 2 }}>
+        <CardContent>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5} flexWrap="wrap" gap={1}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              Competencia mensual — {monthLabel || 'mes actual'}
+            </Typography>
+            <Button
+              variant="contained"
+              color="secondary"
+              size="small"
+              startIcon={<EmojiEvents fontSize="small" />}
+              disabled={closeMonthMutation.isPending}
+              onClick={() => {
+                if (window.confirm('¿Cerrar la competencia mensual? Esto premia al top 1 de referidos válidos del mes y no se puede repetir para el mismo mes.')) {
+                  closeMonthMutation.mutate();
+                }
+              }}
+            >
+              {closeMonthMutation.isPending ? 'Cerrando...' : 'Cerrar mes y premiar'}
+            </Button>
+          </Box>
+
+          {leaderboardLoading ? (
+            <Box display="flex" justifyContent="center" py={4}><CircularProgress size={24} /></Box>
+          ) : !leaderboard || leaderboard.top.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">Nadie tiene referidos válidos este mes todavía.</Typography>
+          ) : (
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>#</TableCell>
+                    <TableCell>Cliente</TableCell>
+                    <TableCell align="right">Referidos válidos</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {leaderboard.top.map((entry) => (
+                    <TableRow key={entry.rank} hover selected={entry.isMe}>
+                      <TableCell>{entry.rank}</TableCell>
+                      <TableCell>{entry.name}</TableCell>
+                      <TableCell align="right">
+                        <Chip size="small" label={entry.validReferralsThisMonth} color={entry.rank === 1 ? 'secondary' : 'default'} variant="outlined" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <Typography variant="subtitle2" fontWeight={700} mb={0.5}>
+        Clientes con actividad de referidos
+      </Typography>
+      <Typography variant="body2" color="text.secondary" mb={1.5}>
+        Cuánto acumuló cada uno por invitados (10 CUP fijos c/u) y por premios de la competencia
+        mensual, cuánto queda pendiente de pago y cuánto ya se le liquidó.
+      </Typography>
+
+      {payoutsError && <Alert severity="error" sx={{ mb: 2 }}>Error al cargar la actividad de referidos.</Alert>}
+
+      {payoutsLoading ? (
+        <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>
+      ) : !payouts || payouts.length === 0 ? (
+        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
+          <Typography variant="body2" color="text.secondary">Todavía nadie tiene actividad de referidos.</Typography>
+        </Paper>
+      ) : (
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>Cliente</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Invitados válidos</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>CUP por invitados</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>CUP por competencia</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Saldo pendiente</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Ya pagado (histórico)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {payouts.map((p) => (
+                <TableRow key={p.clientId} hover>
+                  <TableCell>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <People fontSize="small" color="action" />
+                      <Typography variant="body2" fontWeight={600}>{p.fullName}</Typography>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">{p.email}</Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography variant="body2" color="text.secondary">{p.validReferralsTotal}</Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography variant="body2" color="text.secondary">{p.referralBonusTotal} CUP</Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography variant="body2" color="text.secondary">{p.competitionPrizeTotal} CUP</Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    {p.cupBalance > 0 ? (
+                      <Chip size="small" label={`${p.cupBalance} CUP`} color="warning" />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">0 CUP</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography variant="body2" color="text.secondary">{p.cupPaidTotal} CUP</Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip title={p.cupBalance > 0 ? 'Marcar como pagado (fuera del sistema) y resetear el saldo a 0' : 'No tiene saldo pendiente'}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          color="success"
+                          disabled={p.cupBalance <= 0 || settleMutation.isPending}
+                          onClick={() => {
+                            if (window.confirm(`¿Confirmas que ya le pagaste ${p.cupBalance} CUP a ${p.fullName}? Esto resetea su saldo a 0.`)) {
+                              settleMutation.mutate(p.clientId);
+                            }
+                          }}
+                        >
+                          <LocalAtm fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </TableContainer>
@@ -704,9 +1568,26 @@ function AdminChatPanel() {
   };
 
   return (
-    <Box display="flex" gap={2} height="60vh" minHeight={400}>
+    <Box
+      display="flex"
+      flexDirection={{ xs: 'column', sm: 'row' }}
+      gap={2}
+      height={{ xs: 'auto', sm: '60vh' }}
+      minHeight={400}
+    >
       {/* Conversation list */}
-      <Paper variant="outlined" sx={{ width: 260, flexShrink: 0, borderRadius: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          width: { xs: '100%', sm: 260 },
+          maxHeight: { xs: 240, sm: 'none' },
+          flexShrink: 0,
+          borderRadius: 2,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         <Box px={2} py={1.5} borderBottom="1px solid" sx={{ borderColor: 'divider' }}>
           <Typography variant="subtitle2" fontWeight={700}>Conversaciones</Typography>
         </Box>
@@ -746,7 +1627,17 @@ function AdminChatPanel() {
       </Paper>
 
       {/* Message pane */}
-      <Paper variant="outlined" sx={{ flex: 1, borderRadius: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          flex: 1,
+          minHeight: { xs: 320, sm: 'auto' },
+          borderRadius: 2,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {!selectedTenant ? (
           <Box display="flex" alignItems="center" justifyContent="center" flex={1} flexDirection="column" gap={1}>
             <ChatIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
@@ -840,19 +1731,28 @@ export default function AdminPage() {
         Gestión de tenants y conversaciones
       </Typography>
 
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{ mb: 3, borderBottom: '1px solid', borderColor: 'divider' }}
+      >
         <Tab label="Tenants" icon={<Business fontSize="small" />} iconPosition="start" sx={{ fontWeight: 600, minHeight: 48 }} />
+        <Tab label="Bloqueadas" icon={<Block fontSize="small" />} iconPosition="start" sx={{ fontWeight: 600, minHeight: 48 }} />
         <Tab label="Clientes" icon={<People fontSize="small" />} iconPosition="start" sx={{ fontWeight: 600, minHeight: 48 }} />
-        <Tab label="Referidos" icon={<CardGiftcard fontSize="small" />} iconPosition="start" sx={{ fontWeight: 600, minHeight: 48 }} />
-        <Tab label="MiPymes Referidas" icon={<Storefront fontSize="small" />} iconPosition="start" sx={{ fontWeight: 600, minHeight: 48 }} />
+        <Tab label="Referidos" icon={<EmojiEvents fontSize="small" />} iconPosition="start" sx={{ fontWeight: 600, minHeight: 48 }} />
+        <Tab label="MiPymes Referidas" icon={<EmojiEvents fontSize="small" />} iconPosition="start" sx={{ fontWeight: 600, minHeight: 48 }} />
         <Tab label="Chat" icon={<ChatIcon fontSize="small" />} iconPosition="start" sx={{ fontWeight: 600, minHeight: 48 }} />
       </Tabs>
 
       {tab === 0 && <TenantsPanel />}
-      {tab === 1 && <ClientsPanel />}
-      {tab === 2 && <ReferralsPanel />}
-      {tab === 3 && <MipymeReferralsPanel />}
-      {tab === 4 && <AdminChatPanel />}
+      {tab === 1 && <BlockedAccountsPanel />}
+      {tab === 2 && <ClientsPanel />}
+      {tab === 3 && <ReferralsPanel />}
+      {tab === 4 && <MipymeReferralsPanel />}
+      {tab === 5 && <AdminChatPanel />}
     </Box>
   );
 }

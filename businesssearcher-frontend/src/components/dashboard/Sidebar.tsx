@@ -16,10 +16,10 @@ import {
   LocalShipping as WholesaleIcon,
   PointOfSale as PosIcon,
   Receipt as SalesIcon,
-  Storefront as TerminalIcon,
   Inventory2 as InventoryIcon,
   AccountBalanceWallet as CashIcon,
   Groups as UsersIcon,
+  SupportAgent as ManagersIcon,
   Assignment as RequestsIcon,
   ShoppingCart as PurchasesIcon,
   SwapHoriz as MovementsIcon,
@@ -29,6 +29,7 @@ import {
   Settings as SettingsIcon,
   Security as AuditIcon,
   Assessment as ReportsIcon,
+  CloudSync as SyncIcon,
 } from '@mui/icons-material';
 import { useAuth } from '@/context/AuthContext';
 import { useThemeMode } from '@/context/ThemeContext';
@@ -51,7 +52,7 @@ const wholesaleCatalogItem = {
 const opsItems = [
   { label: 'Punto de Venta', icon: <PosIcon fontSize="small" />, path: '/dashboard/ops/pos' },
   { label: 'Ventas', icon: <SalesIcon fontSize="small" />, path: '/dashboard/ops/sales' },
-  { label: 'Terminales', icon: <TerminalIcon fontSize="small" />, path: '/dashboard/ops/terminals' },
+  { label: 'Gestores', icon: <ManagersIcon fontSize="small" />, path: '/dashboard/ops/managers' },
   { label: 'Inventario', icon: <InventoryIcon fontSize="small" />, path: '/dashboard/ops/inventory' },
   { label: 'Movimientos', icon: <MovementsIcon fontSize="small" />, path: '/dashboard/ops/movements' },
   { label: 'Conteo', icon: <CountIcon fontSize="small" />, path: '/dashboard/ops/counts' },
@@ -63,6 +64,7 @@ const opsItems = [
   { label: 'Estadísticas del Negocio', icon: <ReportsIcon fontSize="small" />, path: '/dashboard/ops/reports' },
   { label: 'Auditoría', icon: <AuditIcon fontSize="small" />, path: '/dashboard/ops/audit-log' },
   { label: 'Configuración', icon: <SettingsIcon fontSize="small" />, path: '/dashboard/ops/settings' },
+  { label: 'Sincronización', icon: <SyncIcon fontSize="small" />, path: '/dashboard/ops/sync' },
 ];
 
 const opsUsersItem = { label: 'Usuarios (TPV)', icon: <UsersIcon fontSize="small" />, path: '/dashboard/ops/users' };
@@ -74,6 +76,7 @@ const OPS_ITEM_ROLES: Record<string, string[]> = {
   'Punto de Venta': ['Cajero', 'JefeDeTurno'],
   'Ventas': ['Cajero', 'JefeDeTurno'],
   'Caja': ['Cajero', 'JefeDeTurno'],
+  'Gestores': ['Observador'],
   'Inventario': ['Almacenero', 'JefeDeTurno'],
   'Movimientos': ['Almacenero', 'JefeDeTurno'],
   'Conteo': ['Cajero', 'Almacenero', 'JefeDeTurno'],
@@ -83,7 +86,10 @@ const OPS_ITEM_ROLES: Record<string, string[]> = {
   'Gastos': ['Comercial', 'JefeDeTurno'],
   'Estadísticas del Negocio': ['Auditor', 'JefeDeTurno'],
   'Auditoría': ['Auditor'],
-  // 'Terminales' y 'Configuración' son de gestión exclusiva del Administrador.
+  // Sincronización: el push (subir) lo puede disparar cualquier trabajador; el pull
+  // (bajar) queda restringido a Administrador dentro de la propia pantalla.
+  'Sincronización': ['Cajero', 'JefeDeTurno', 'Almacenero', 'Comercial', 'Auditor'],
+  // 'Configuración' es de gestión exclusiva del Administrador.
 };
 
 const adminItems = [
@@ -142,7 +148,7 @@ function NavItem({ label, icon, active, onClick, accent = 'primary', collapsed =
           background: active ? c.bg : c.hoverGrad,
           boxShadow: active ? 'none' : c.glow,
           '&::before': { opacity: active ? 0 : 0.5 },
-          '& .MuiListItemIcon-root': { color: c.text },
+          '& .MuiListItemIcon-root': { color: c.text, transform: 'translateX(3px) scale(1.12)' },
           '& .MuiListItemText-primary': { color: c.text },
         },
         '&.Mui-selected': {
@@ -154,7 +160,12 @@ function NavItem({ label, icon, active, onClick, accent = 'primary', collapsed =
         },
       }}
     >
-      <ListItemIcon sx={{ minWidth: collapsed ? 0 : 34, color: active ? c.text : 'text.secondary', justifyContent: 'center' }}>
+      <ListItemIcon sx={{
+        minWidth: collapsed ? 0 : 34,
+        color: active ? c.text : 'text.secondary',
+        justifyContent: 'center',
+        transition: `transform 0.35s ${SPRING}, color 0.2s ease-out`,
+      }}>
         {icon}
       </ListItemIcon>
       {!collapsed && (

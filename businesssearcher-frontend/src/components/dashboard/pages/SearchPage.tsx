@@ -72,7 +72,7 @@ export default function SearchPage() {
             value={city}
             onChange={(e) => setCity(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            sx={{ width: 180 }}
+            sx={{ width: { xs: '100%', sm: 180 } }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -110,7 +110,7 @@ export default function SearchPage() {
               <Typography variant="caption" color="text.secondary" fontWeight={600} gutterBottom>
                 DISPONIBILIDAD
               </Typography>
-              <Box display="flex" gap={1} mt={0.5}>
+              <Box display="flex" gap={1} mt={0.5} flexWrap="wrap">
                 {[
                   { label: 'Todos', value: undefined },
                   { label: 'Disponibles', value: true },

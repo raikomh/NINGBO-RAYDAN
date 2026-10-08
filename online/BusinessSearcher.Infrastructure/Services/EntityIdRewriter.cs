@@ -27,7 +27,6 @@ namespace BusinessSearcher.Infrastructure.Services
                     TenantId = onlineTenantId,
                     Movements = x.Movements.Select(m => m with { TenantId = onlineTenantId }).ToList()
                 }).ToList(),
-                Terminals = envelope.Terminals.Select(x => x with { TenantId = onlineTenantId }).ToList(),
                 OperationsUsers = envelope.OperationsUsers.Select(x => x with { TenantId = onlineTenantId }).ToList(),
                 Expenses = envelope.Expenses.Select(x => x with { TenantId = onlineTenantId }).ToList()
             };

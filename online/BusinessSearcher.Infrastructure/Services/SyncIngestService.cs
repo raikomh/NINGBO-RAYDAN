@@ -38,7 +38,6 @@ namespace BusinessSearcher.Infrastructure.Services
             accepted += await IngestWarehousesAsync(rewritten.Warehouses, cancellationToken);
             accepted += await IngestCategoriesAsync(rewritten.Categories, cancellationToken);
             accepted += await IngestProductsAsync(rewritten.Products, cancellationToken);
-            accepted += await IngestTerminalsAsync(rewritten.Terminals, cancellationToken);
             accepted += await IngestOperationsUsersAsync(onlineTenantId, rewritten.OperationsUsers, conflicts, cancellationToken);
 
             accepted += await IngestSalesAsync(rewritten.Sales, cancellationToken);
@@ -169,23 +168,6 @@ namespace BusinessSearcher.Infrastructure.Services
             return items.Count;
         }
 
-        private async Task<int> IngestTerminalsAsync(IReadOnlyList<SyncTerminalDto> items, CancellationToken ct)
-        {
-            if (items.Count == 0) return 0;
-            var ids = items.Select(x => x.Id).ToList();
-            var existingById = await _db.Terminals.Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
-
-            foreach (var dto in items)
-            {
-                if (existingById.TryGetValue(dto.Id, out var existing))
-                    existing.Update(dto.Name, dto.Description, dto.WarehouseId, dto.IsActive);
-                else
-                    _db.Terminals.Add(Terminal.Restore(
-                        dto.Id, dto.CreatedAt, dto.UpdatedAt, dto.TenantId, dto.Name, dto.Description, dto.WarehouseId, dto.IsActive));
-            }
-            return items.Count;
-        }
-
         // OperationsUser.Email tiene índice único GLOBAL (no por tenant): si el email ya
         // pertenece a otro tenant online, se rechaza esa fila y se reporta como conflicto.
         private async Task<int> IngestOperationsUsersAsync(
@@ -247,7 +229,7 @@ namespace BusinessSearcher.Infrastructure.Services
                 var sale = Sale.Restore(
                     dto.Id, dto.CreatedAt, dto.UpdatedAt, dto.TenantId, dto.Date, dto.Subtotal, dto.Discount,
                     dto.Total, dto.SubtotalUSD, dto.TotalUSD, dto.TaxAmount, Enum.Parse<PaymentMethod>(dto.PaymentMethod, true),
-                    dto.CashierId, dto.RegisterId, dto.TerminalName, Enum.Parse<Currency>(dto.PaymentCurrency, true),
+                    dto.CashierId, dto.RegisterId, dto.WarehouseName, Enum.Parse<Currency>(dto.PaymentCurrency, true),
                     dto.ExchangeRate, Enum.Parse<SaleStatus>(dto.Status, true),
                     dto.Items.Select(i => SaleItem.Restore(
                         i.Id, i.CreatedAt, i.UpdatedAt, i.ProductId, i.ProductName, i.WarehouseId, i.Quantity,
@@ -255,7 +237,8 @@ namespace BusinessSearcher.Infrastructure.Services
                     dto.Payments.Select(p => SalePayment.Restore(
                         p.Id, p.CreatedAt, p.UpdatedAt, Enum.Parse<PaymentMethod>(p.Method, true), p.Amount,
                         Enum.Parse<Currency>(p.Currency, true), p.AmountUSD, p.TransactionId, p.CashTendered,
-                        p.Change, p.ChangeCurrency is null ? null : Enum.Parse<Currency>(p.ChangeCurrency, true))));
+                        p.Change, p.ChangeCurrency is null ? null : Enum.Parse<Currency>(p.ChangeCurrency, true))),
+                    dto.ManagerCode);
 
                 _db.Sales.Add(sale);
                 accepted++;
@@ -322,7 +305,7 @@ namespace BusinessSearcher.Infrastructure.Services
                 if (existingSet.Contains(dto.Id)) { accepted++; continue; }
 
                 _db.CashRegisters.Add(CashRegister.Restore(
-                    dto.Id, dto.CreatedAt, dto.UpdatedAt, dto.TenantId, dto.WarehouseId, dto.TerminalId,
+                    dto.Id, dto.CreatedAt, dto.UpdatedAt, dto.TenantId, dto.WarehouseId,
                     dto.OpenDate, dto.CloseDate, dto.InitialAmount, dto.ExpectedAmount, dto.ActualAmount, dto.Difference,
                     dto.InitialAmountUSD, dto.ExpectedAmountUSD, dto.ActualAmountUSD, dto.DifferenceUSD,
                     Enum.Parse<CashRegisterStatus>(dto.Status, true), dto.OpenedBy, dto.ClosedBy, dto.SalesCount,

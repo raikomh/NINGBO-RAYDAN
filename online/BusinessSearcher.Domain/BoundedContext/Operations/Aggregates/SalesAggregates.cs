@@ -109,7 +109,10 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
         public PaymentMethod PaymentMethod  { get; private set; }
         public Guid          CashierId      { get; private set; }
         public Guid          RegisterId     { get; private set; }
-        public string?       TerminalName   { get; private set; }
+        /// <summary>Nombre del almacén donde se realizó la venta (foto del nombre al momento de vender).</summary>
+        public string?       WarehouseName  { get; private set; }
+        /// <summary>Código del gestor (op_managers.Code) que realizó la venta.</summary>
+        public string?       ManagerCode    { get; private set; }
         public Currency      PaymentCurrency{ get; private set; }
         public decimal?      ExchangeRate   { get; private set; }
         public SaleStatus    Status         { get; private set; } = SaleStatus.Completed;
@@ -125,7 +128,7 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
 
         public static Sale Create(Guid tenantId, Guid cashierId, Guid registerId, PaymentMethod paymentMethod,
             Currency paymentCurrency, IEnumerable<SaleItem> items, IEnumerable<SalePayment> payments,
-            decimal? exchangeRate = null, decimal? taxAmount = null, string? terminalName = null)
+            decimal? exchangeRate = null, decimal? taxAmount = null, string? warehouseName = null, string? managerCode = null)
         {
             if (tenantId == Guid.Empty) throw new DomainException("La venta debe pertenecer a un negocio.");
             var itemList = items?.ToList() ?? new List<SaleItem>();
@@ -135,7 +138,8 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
             {
                 TenantId = tenantId, CashierId = cashierId, RegisterId = registerId, Date = DateTime.UtcNow,
                 PaymentMethod = paymentMethod, PaymentCurrency = paymentCurrency, ExchangeRate = exchangeRate,
-                TaxAmount = taxAmount, TerminalName = terminalName
+                TaxAmount = taxAmount, WarehouseName = warehouseName,
+                ManagerCode = string.IsNullOrWhiteSpace(managerCode) ? null : managerCode.Trim()
             };
             foreach (var it in itemList) sale._items.Add(it);
             foreach (var p in payments ?? Enumerable.Empty<SalePayment>()) sale._payments.Add(p);
@@ -183,16 +187,17 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
 
         public static Sale Restore(Guid id, DateTime createdAt, DateTime? updatedAt, Guid tenantId,
             DateTime date, decimal subtotal, decimal discount, decimal total, decimal? subtotalUsd, decimal? totalUsd,
-            decimal? taxAmount, PaymentMethod paymentMethod, Guid cashierId, Guid registerId, string? terminalName,
+            decimal? taxAmount, PaymentMethod paymentMethod, Guid cashierId, Guid registerId, string? warehouseName,
             Currency paymentCurrency, decimal? exchangeRate, SaleStatus status,
-            IEnumerable<SaleItem> items, IEnumerable<SalePayment> payments)
+            IEnumerable<SaleItem> items, IEnumerable<SalePayment> payments, string? managerCode = null)
         {
             var sale = new Sale(id)
             {
                 TenantId = tenantId, Date = date, Subtotal = subtotal, Discount = discount, Total = total,
                 SubtotalUSD = subtotalUsd, TotalUSD = totalUsd, TaxAmount = taxAmount, PaymentMethod = paymentMethod,
-                CashierId = cashierId, RegisterId = registerId, TerminalName = terminalName,
-                PaymentCurrency = paymentCurrency, ExchangeRate = exchangeRate, Status = status
+                CashierId = cashierId, RegisterId = registerId, WarehouseName = warehouseName,
+                PaymentCurrency = paymentCurrency, ExchangeRate = exchangeRate, Status = status,
+                ManagerCode = managerCode
             };
             foreach (var it in items) sale._items.Add(it);
             foreach (var p in payments) sale._payments.Add(p);

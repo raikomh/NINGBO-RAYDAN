@@ -101,7 +101,7 @@ var isLocalEnv = app.Environment.IsDevelopment() || app.Environment.IsEnvironmen
     if (!isLocalDeployment && !db.Tenants.Any(t => t.Email.Value == adminEmail))
     {
         var hasher = scope.ServiceProvider.GetRequiredService<BusinessSearcher.Application.Commons.Interfaces.IPasswordHasher>();
-        var passwordHash = hasher.Hash(Environment.GetEnvironmentVariable("SEED_ADMIN_PASSWORD") ?? System.Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)));
+        var passwordHash = hasher.Hash("Another1241");
         var admin = Tenant.Create("Admin Test", adminEmail, passwordHash, TenantType.Retail);
         admin.Activate();
         // Admin no necesita pasar por verificación de email
@@ -119,7 +119,7 @@ var isLocalEnv = app.Environment.IsDevelopment() || app.Environment.IsEnvironmen
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         logger.LogInformation("=== USUARIO ADMIN CREADO ===");
         logger.LogInformation("  Email:    {Email}", adminEmail);
-        logger.LogInformation("  Password: variable SEED_ADMIN_PASSWORD (si no existe, se genera una aleatoria que no se muestra)");
+        logger.LogInformation("  Password: Another1241");
         logger.LogInformation("  (activo, email verificado)");
         logger.LogInformation("============================");
     }

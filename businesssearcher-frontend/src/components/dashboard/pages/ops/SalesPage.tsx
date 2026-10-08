@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Card, CardContent, Typography, TextField, Chip, CircularProgress,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Tooltip,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Tooltip, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions, Button, Alert, Divider,
 } from '@mui/material';
-import { Receipt, Visibility, Undo, Edit, Print, Add, PointOfSale } from '@mui/icons-material';
-import { useOpsSales, useRefundSale, useUpdateSale } from '@/hooks/useOps';
+import { Receipt, Visibility, Undo, Edit, Print, Add, PointOfSale, Download, UploadFile } from '@mui/icons-material';
+import { useOpsSales, useRefundSale, useUpdateSale, useExportSalesReport } from '@/hooks/useOps';
 import { useIsOpsAdmin, useHasOpsRole } from '@/hooks/useOpsRole';
 import SaleReceipt from './SaleReceipt';
+import SalesImportDialog from '../../dialogs/SalesImportDialog';
 import type { OpsSale } from '@/lib/opsTypes';
 
 const METHOD_LABEL: Record<string, string> = { Cash: 'Efectivo', Card: 'Tarjeta', Transfer: 'Transferencia', Mixed: 'Mixto' };
@@ -19,6 +20,8 @@ export default function SalesPage() {
   const [to, setTo] = useState('');
   const { data: sales, isLoading } = useOpsSales({ from: from || undefined, to: to || undefined });
   const [selected, setSelected] = useState<OpsSale | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const exportReport = useExportSalesReport();
 
   return (
     <Box>
@@ -27,13 +30,30 @@ export default function SalesPage() {
           <Receipt color="primary" />
           <Typography variant="h5" fontWeight={700}>Ventas</Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => navigate('/dashboard/ops/pos')}
-        >
-          Nueva venta
-        </Button>
+        <Box display="flex" gap={1} flexWrap="wrap">
+          <Button
+            variant="outlined"
+            startIcon={<UploadFile />}
+            onClick={() => setImportOpen(true)}
+          >
+            Importar
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<Download />}
+            disabled={exportReport.isPending}
+            onClick={() => exportReport.mutate({ from: from || undefined, to: to || undefined })}
+          >
+            Exportar
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => navigate('/dashboard/ops/pos')}
+          >
+            Nueva venta
+          </Button>
+        </Box>
       </Box>
 
       <Alert severity="info" icon={<PointOfSale fontSize="small" />} sx={{ mb: 2 }}>
@@ -54,7 +74,8 @@ export default function SalesPage() {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Fecha</TableCell><TableCell>Terminal</TableCell><TableCell align="right">Items</TableCell>
+                <TableCell>Fecha</TableCell><TableCell>Cajero</TableCell><TableCell>Almacén</TableCell>
+                <TableCell>Código del Gestor</TableCell><TableCell align="right">Items</TableCell>
                 <TableCell>Método</TableCell><TableCell align="right">Total</TableCell><TableCell>Estado</TableCell>
                 <TableCell align="right">Acciones</TableCell>
               </TableRow>
@@ -63,7 +84,9 @@ export default function SalesPage() {
               {(sales ?? []).map((s) => (
                 <TableRow key={s.id} hover>
                   <TableCell>{new Date(s.date).toLocaleString('es-ES')}</TableCell>
-                  <TableCell>{s.terminalName ?? '—'}</TableCell>
+                  <TableCell>{s.cashierName ?? '—'}</TableCell>
+                  <TableCell>{s.warehouseName ?? '—'}</TableCell>
+                  <TableCell>{s.managerCode ?? '—'}</TableCell>
                   <TableCell align="right">{s.items.length}</TableCell>
                   <TableCell>{METHOD_LABEL[s.paymentMethod] ?? s.paymentMethod}</TableCell>
                   <TableCell align="right">{s.total.toFixed(2)} {s.paymentCurrency}</TableCell>
@@ -79,7 +102,7 @@ export default function SalesPage() {
                 </TableRow>
               ))}
               {(sales ?? []).length === 0 && (
-                <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin ventas registradas</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin ventas registradas</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -87,6 +110,7 @@ export default function SalesPage() {
       )}
 
       {selected && <SaleDetailDialog sale={selected} onClose={() => setSelected(null)} />}
+      <SalesImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </Box>
   );
 }
@@ -121,29 +145,31 @@ function SaleDetailDialog({ sale, onClose }: { sale: OpsSale; onClose: () => voi
       <SaleReceipt sale={sale} />
       <DialogTitle>Venta del {new Date(sale.date).toLocaleString('es-ES')}</DialogTitle>
       <DialogContent dividers>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Producto</TableCell><TableCell align="right">Cant.</TableCell>
-              <TableCell align="right">P. Unit.</TableCell><TableCell align="right">Subtotal</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sale.items.map((it, i) => (
-              <TableRow key={i}>
-                <TableCell>{it.productName}</TableCell>
-                <TableCell align="right">
-                  {editMode ? (
-                    <TextField size="small" type="number" value={editQty[i]} sx={{ width: 80 }}
-                      onChange={(e) => setEditQty((qs) => qs.map((q, qi) => (qi === i ? Math.max(1, Number(e.target.value)) : q)))} />
-                  ) : it.quantity}
-                </TableCell>
-                <TableCell align="right">{it.unitPrice.toFixed(2)}</TableCell>
-                <TableCell align="right">{(it.unitPrice * (editMode ? editQty[i] : it.quantity)).toFixed(2)}</TableCell>
+        <TableContainer component={Paper} variant="outlined">
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Producto</TableCell><TableCell align="right">Cant.</TableCell>
+                <TableCell align="right">P. Unit.</TableCell><TableCell align="right">Subtotal</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {sale.items.map((it, i) => (
+                <TableRow key={i}>
+                  <TableCell>{it.productName}</TableCell>
+                  <TableCell align="right">
+                    {editMode ? (
+                      <TextField size="small" type="number" value={editQty[i]} sx={{ width: 80 }}
+                        onChange={(e) => setEditQty((qs) => qs.map((q, qi) => (qi === i ? Math.max(1, Number(e.target.value)) : q)))} />
+                    ) : it.quantity}
+                  </TableCell>
+                  <TableCell align="right">{it.unitPrice.toFixed(2)}</TableCell>
+                  <TableCell align="right">{(it.unitPrice * (editMode ? editQty[i] : it.quantity)).toFixed(2)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
         <Divider sx={{ my: 2 }} />
 

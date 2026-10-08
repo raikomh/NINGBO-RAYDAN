@@ -69,14 +69,15 @@ namespace BusinessSearcher.Infrastructure.Services
             var saleDtos = sales.Select(s => new SyncSaleDto(
                 s.Id, s.TenantId, s.CreatedAt, s.UpdatedAt,
                 s.Date, s.Subtotal, s.Discount, s.Total, s.SubtotalUSD, s.TotalUSD,
-                s.TaxAmount, s.PaymentMethod.ToString(), s.CashierId, s.RegisterId, s.TerminalName,
+                s.TaxAmount, s.PaymentMethod.ToString(), s.CashierId, s.RegisterId, s.WarehouseName,
                 s.PaymentCurrency.ToString(), s.ExchangeRate, s.Status.ToString(),
                 s.Items.Select(i => new SyncSaleItemDto(
                     i.Id, i.CreatedAt, i.UpdatedAt, i.ProductId, i.ProductName, i.WarehouseId,
                     i.Quantity, i.UnitPrice, i.DiscountType.ToString(), i.DiscountValue)).ToList(),
                 s.Payments.Select(pm => new SyncSalePaymentDto(
                     pm.Id, pm.CreatedAt, pm.UpdatedAt, pm.Method.ToString(), pm.Amount, pm.Currency.ToString(),
-                    pm.AmountUSD, pm.TransactionId, pm.CashTendered, pm.Change, pm.ChangeCurrency?.ToString())).ToList())
+                    pm.AmountUSD, pm.TransactionId, pm.CashTendered, pm.Change, pm.ChangeCurrency?.ToString())).ToList(),
+                s.ManagerCode)
             ).ToList();
 
             var purchases = await _db.Purchases
@@ -111,7 +112,7 @@ namespace BusinessSearcher.Infrastructure.Services
                 .ToListAsync(cancellationToken);
             var cashRegisterDtos = cashRegisters.Select(r => new SyncCashRegisterDto(
                 r.Id, r.TenantId, r.CreatedAt, r.UpdatedAt,
-                r.WarehouseId, r.TerminalId, r.OpenDate, r.CloseDate,
+                r.WarehouseId, r.OpenDate, r.CloseDate,
                 r.InitialAmount, r.ExpectedAmount, r.ActualAmount, r.Difference,
                 r.InitialAmountUSD, r.ExpectedAmountUSD, r.ActualAmountUSD, r.DifferenceUSD,
                 r.Status.ToString(), r.OpenedBy, r.ClosedBy, r.SalesCount, r.TotalSales, r.TotalExpenses,
@@ -122,13 +123,6 @@ namespace BusinessSearcher.Infrastructure.Services
                         m.Type.ToString(), m.Amount, m.AmountUSD, m.Currency.ToString(), m.Description, m.UserId))
                     .ToList())
             ).ToList();
-
-            var terminals = await _db.Terminals
-                .Where(x => x.TenantId == onlineTenantId)
-                .Select(x => new SyncTerminalDto(
-                    x.Id, x.TenantId, x.CreatedAt, x.UpdatedAt,
-                    x.Name, x.Description, x.WarehouseId, x.IsActive))
-                .ToListAsync(cancellationToken);
 
             var operationsUsers = await _db.OperationsUsers
                 .Where(x => x.TenantId == onlineTenantId)
@@ -148,7 +142,7 @@ namespace BusinessSearcher.Infrastructure.Services
             return new SyncPushEnvelopeDto(
                 onlineTenantId, DateTime.UtcNow,
                 businessInfos, suppliers, warehouses, categories, productDtos,
-                saleDtos, purchaseDtos, inventoryMovements, cashRegisterDtos, terminals,
+                saleDtos, purchaseDtos, inventoryMovements, cashRegisterDtos,
                 operationsUsers, expenses);
         }
     }

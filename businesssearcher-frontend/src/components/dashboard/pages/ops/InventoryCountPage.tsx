@@ -4,9 +4,9 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, FormControlLabel, Checkbox, IconButton, Tooltip,
 } from '@mui/material';
-import { Add, FactCheck, Visibility } from '@mui/icons-material';
+import { Add, FactCheck, Visibility, CheckCircle, RadioButtonUnchecked } from '@mui/icons-material';
 import {
-  useInventoryCounts, useCreateCount, useCloseCount, useWarehouses, useOpsProducts,
+  useInventoryCounts, useCreateCount, useCloseCount, useSetCountItemAudited, useWarehouses, useOpsProducts,
 } from '@/hooks/useOps';
 import type { OpsInventoryCount } from '@/lib/opsTypes';
 
@@ -14,13 +14,14 @@ export default function InventoryCountPage() {
   const { data: counts, isLoading } = useInventoryCounts();
   const { data: warehouses } = useWarehouses();
   const [open, setOpen] = useState(false);
-  const [detail, setDetail] = useState<OpsInventoryCount | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const detail = counts?.find((c) => c.id === detailId) ?? null;
 
   const whName = (id: string) => warehouses?.find((w) => w.id === id)?.name ?? '—';
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2} mb={3}>
         <Typography variant="h5" fontWeight={700}>Conteo de inventario</Typography>
         <Button startIcon={<Add />} variant="contained" onClick={() => setOpen(true)}>Nuevo conteo</Button>
       </Box>
@@ -33,36 +34,42 @@ export default function InventoryCountPage() {
             <TableHead>
               <TableRow>
                 <TableCell>Fecha</TableCell><TableCell>Almacén</TableCell><TableCell align="right">Productos</TableCell>
-                <TableCell align="right">Discrepancias</TableCell><TableCell>Estado</TableCell><TableCell align="right">Ver</TableCell>
+                <TableCell align="right">Discrepancias</TableCell><TableCell align="right">Auditados</TableCell>
+                <TableCell>Estado</TableCell><TableCell align="right">Ver</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {(counts ?? []).map((c) => {
                 const discrepancies = c.items.filter((i) => i.difference !== 0).length;
+                const auditedCount = c.items.filter((i) => i.audited).length;
+                const allAudited = c.items.length > 0 && auditedCount === c.items.length;
                 return (
                   <TableRow key={c.id} hover>
                     <TableCell>{new Date(c.date).toLocaleDateString()}</TableCell>
                     <TableCell>{whName(c.warehouseId)}</TableCell>
                     <TableCell align="right">{c.items.length}</TableCell>
                     <TableCell align="right"><Chip size="small" color={discrepancies ? 'warning' : 'success'} label={discrepancies} /></TableCell>
+                    <TableCell align="right">
+                      <Chip size="small" color={allAudited ? 'success' : 'warning'} label={`${auditedCount}/${c.items.length}`} />
+                    </TableCell>
                     <TableCell>
                       <Chip size="small" label={c.status === 'Open' ? 'Abierto' : c.adjusted ? 'Cerrado (ajustado)' : 'Cerrado'}
                         color={c.status === 'Open' ? 'info' : 'default'} />
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Ver detalle"><IconButton size="small" onClick={() => setDetail(c)}><Visibility fontSize="small" /></IconButton></Tooltip>
+                      <Tooltip title="Ver detalle"><IconButton size="small" onClick={() => setDetailId(c.id)}><Visibility fontSize="small" /></IconButton></Tooltip>
                     </TableCell>
                   </TableRow>
                 );
               })}
-              {(counts ?? []).length === 0 && <TableRow><TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin conteos</TableCell></TableRow>}
+              {(counts ?? []).length === 0 && <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin conteos</TableCell></TableRow>}
             </TableBody>
           </Table>
         </TableContainer>
       )}
 
       {open && <CountDialog onClose={() => setOpen(false)} />}
-      {detail && <CountDetailDialog count={detail} onClose={() => setDetail(null)} />}
+      {detail && <CountDetailDialog count={detail} onClose={() => setDetailId(null)} />}
     </Box>
   );
 }
@@ -131,7 +138,12 @@ function CountDialog({ onClose }: { onClose: () => void }) {
 
 function CountDetailDialog({ count, onClose }: { count: OpsInventoryCount; onClose: () => void }) {
   const close = useCloseCount();
+  const audit = useSetCountItemAudited();
   const [apply, setApply] = useState(true);
+
+  const auditedCount = count.items.filter((i) => i.audited).length;
+  const allAudited = count.items.length > 0 && auditedCount === count.items.length;
+  const isOpen = count.status === 'Open';
 
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
@@ -139,7 +151,13 @@ function CountDetailDialog({ count, onClose }: { count: OpsInventoryCount; onClo
       <DialogContent>
         <TableContainer component={Card} variant="outlined" sx={{ mt: 1 }}>
           <Table size="small">
-            <TableHead><TableRow><TableCell>Producto</TableCell><TableCell align="right">Sistema</TableCell><TableCell align="right">Contado</TableCell><TableCell align="right">Diferencia</TableCell></TableRow></TableHead>
+            <TableHead>
+              <TableRow>
+                <TableCell>Producto</TableCell><TableCell align="right">Sistema</TableCell>
+                <TableCell align="right">Contado</TableCell><TableCell align="right">Diferencia</TableCell>
+                <TableCell align="center">Auditado</TableCell>
+              </TableRow>
+            </TableHead>
             <TableBody>
               {count.items.map((i) => (
                 <TableRow key={i.productId}>
@@ -150,24 +168,40 @@ function CountDetailDialog({ count, onClose }: { count: OpsInventoryCount; onClo
                     <Chip size="small" color={i.difference === 0 ? 'default' : i.difference > 0 ? 'info' : 'warning'}
                       label={i.difference > 0 ? `+${i.difference}` : i.difference} />
                   </TableCell>
+                  <TableCell align="center">
+                    <Tooltip title={isOpen ? (i.audited ? 'Marcar como pendiente' : 'Marcar como auditado') : ''}>
+                      <span>
+                        <IconButton size="small" disabled={!isOpen || audit.isPending}
+                          color={i.audited ? 'success' : 'default'}
+                          onClick={() => audit.mutate({ id: count.id, productId: i.productId, audited: !i.audited })}>
+                          {i.audited ? <CheckCircle fontSize="small" /> : <RadioButtonUnchecked fontSize="small" />}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </TableContainer>
 
-        {count.status === 'Open' && (
+        {isOpen && (
           <Box mt={2}>
             <FormControlLabel control={<Checkbox checked={apply} onChange={(e) => setApply(e.target.checked)} />}
               label="Ajustar el stock del sistema a lo contado al cerrar" />
-            {close.isError && <Alert severity="error">No se pudo cerrar el conteo.</Alert>}
+            {!allAudited && (
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                Faltan {count.items.length - auditedCount} de {count.items.length} productos por auditar. Debes verificar todos antes de cerrar el conteo.
+              </Alert>
+            )}
+            {close.isError && <Alert severity="error" sx={{ mt: 1 }}>No se pudo cerrar el conteo.</Alert>}
           </Box>
         )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cerrar</Button>
-        {count.status === 'Open' && (
-          <Button variant="contained" startIcon={<FactCheck />} disabled={close.isPending}
+        {isOpen && (
+          <Button variant="contained" startIcon={<FactCheck />} disabled={close.isPending || !allAudited}
             onClick={() => close.mutate({ id: count.id, applyAdjustments: apply }, { onSuccess: onClose })}>
             Cerrar conteo
           </Button>

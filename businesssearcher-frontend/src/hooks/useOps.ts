@@ -2,14 +2,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/apiClient';
 import type {
   OpsWarehouse, OpsCategory, OpsProduct, CreateOpsProduct,
-  OpsSale, CreateOpsSale, UpdateOpsSale, OpsCashRegister, OpsCashMovement, OpsTerminal, OpsExchangeRate,
-  OpsUser, CreateOpsUser, UpdateOpsUser,
-  OpsPurchaseRequest, OpsPurchase, CreateOpsPurchase, OpsInventoryMovement, CreateOpsMovement,
+  OpsSale, CreateOpsSale, UpdateOpsSale, OpsCashRegister, OpsCashMovement, OpsExchangeRate,
+  OpsUser, CreateOpsUser, UpdateOpsUser, OpsManager, SaveOpsManager,
+  OpsPurchaseRequest, OpsPurchase, CreateOpsPurchase, UpdateOpsPurchase, OpsInventoryMovement, CreateOpsMovement,
   ConvertInventoryRequest,
   OpsInventoryCount, CreateOpsCount, OpsSupplier,
-  OpsExpense, CreateOpsExpense,
+  OpsExpense, CreateOpsExpense, OpsRole,
+  OpsRoleSalaryConfig, SaveOpsRoleSalaryConfig, OpsPayrollPreview, RegisterOpsPayrollExpense,
   OpsBusinessInfo, SaveOpsBusinessInfo, OpsAuditLog, SalesReport, InventoryReport, ExpensesReport,
-  OpsSetting, OpsNotification, MonthlyDashboard, ImportProductsResult, ImportPriceDecision,
+  OpsSetting, OpsNotification, MonthlyDashboard, ImportProductsResult, ImportPriceDecision, DashboardSummary,
+  SyncPushResult, SyncPullResult, SyncHistoryEntry, SyncApiKeyResult, SyncConnectionStatus,
 } from '@/lib/opsTypes';
 
 const unwrap = (res: { data: unknown }) => {
@@ -76,6 +78,49 @@ export function useCreateExpense() {
     mutationFn: (dto: CreateOpsExpense) => api.post('/api/v1/ops/expenses', dto),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ops', 'expenses'] });
+      qc.invalidateQueries({ queryKey: ['ops', 'cash'] });
+    },
+  });
+}
+
+// ── Roles y salarios (solo Administrador puede modificar/eliminar) ──
+export function useRoleSalaryConfigs() {
+  return useQuery<OpsRoleSalaryConfig[]>({
+    queryKey: ['ops', 'role-salary-configs'],
+    queryFn: () => safeGet('/api/v1/ops/role-salary-configs'),
+  });
+}
+export function useSaveRoleSalaryConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ role, dto }: { role: OpsRole; dto: SaveOpsRoleSalaryConfig }) =>
+      api.put(`/api/v1/ops/role-salary-configs/${role}`, dto),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'role-salary-configs'] }),
+  });
+}
+export function useDeleteRoleSalaryConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (role: OpsRole) => api.delete(`/api/v1/ops/role-salary-configs/${role}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'role-salary-configs'] }),
+  });
+}
+
+// ── Nómina (gasto de salario calculado a partir de los roles) ──
+export function usePayrollPreview(from?: string, to?: string) {
+  return useQuery<OpsPayrollPreview>({
+    queryKey: ['ops', 'payroll', 'preview', from, to],
+    queryFn: () => safeGet('/api/v1/ops/payroll/preview', { from, to }),
+    enabled: !!from && !!to,
+  });
+}
+export function useRegisterPayrollExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: RegisterOpsPayrollExpense) => api.post('/api/v1/ops/payroll/register', dto),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ops', 'expenses'] });
+      qc.invalidateQueries({ queryKey: ['ops', 'payroll'] });
       qc.invalidateQueries({ queryKey: ['ops', 'cash'] });
     },
   });
@@ -182,7 +227,7 @@ export function useImportOpsProducts() {
 }
 
 // ── Ventas ──
-export function useOpsSales(params?: { from?: string; to?: string; registerId?: string }) {
+export function useOpsSales(params?: { from?: string; to?: string; registerId?: string; cashierId?: string }) {
   return useQuery<OpsSale[]>({
     queryKey: ['ops', 'sales', params],
     queryFn: () => safeGet('/api/v1/ops/sales', params as Record<string, unknown>),
@@ -222,6 +267,33 @@ export function useUpdateSale() {
     },
   });
 }
+/**
+ * Importa ventas desde Excel (Código, Producto, Cantidad, Precio). Cuando el Excel trae precios
+ * distintos a los del sistema y `acceptNewPrices` viene undefined, el backend no registra nada:
+ * devuelve `needsPriceConfirmation` + `priceDifferences` para que el usuario decida y se reenvíe
+ * la misma importación con `acceptNewPrices` en true/false.
+ */
+export function useImportSales() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file, acceptNewPrices }: { file: File; acceptNewPrices?: boolean }) => {
+      const form = new FormData();
+      form.append('file', file);
+      if (acceptNewPrices !== undefined) form.append('acceptNewPrices', String(acceptNewPrices));
+      const res = await api.post('/api/v1/ops/sales/import', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return (res.data?.data ?? res.data) as import('@/lib/opsTypes').ImportSalesResult;
+    },
+    onSuccess: (result) => {
+      if (result.importedCount > 0) {
+        qc.invalidateQueries({ queryKey: ['ops', 'sales'] });
+        qc.invalidateQueries({ queryKey: ['ops', 'products'] });
+        qc.invalidateQueries({ queryKey: ['ops', 'cash', 'current'] });
+      }
+    },
+  });
+}
 
 // ── Caja ──
 export function useCurrentCashRegister() {
@@ -249,7 +321,7 @@ export function useCashMovements(registerId?: string) {
 export function useOpenRegister() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (dto: { initialAmount: number; warehouseId?: string; terminalId?: string }) =>
+    mutationFn: (dto: { initialAmount: number; initialAmountUSD?: number; warehouseId?: string }) =>
       api.post('/api/v1/ops/cash-registers/open', dto),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'cash'] }),
   });
@@ -257,8 +329,8 @@ export function useOpenRegister() {
 export function useCloseRegister() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, actualAmount }: { id: string; actualAmount: number }) =>
-      api.post(`/api/v1/ops/cash-registers/${id}/close`, { actualAmount }),
+    mutationFn: ({ id, actualAmount, actualAmountUSD }: { id: string; actualAmount: number; actualAmountUSD?: number }) =>
+      api.post(`/api/v1/ops/cash-registers/${id}/close`, { actualAmount, actualAmountUSD }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'cash'] }),
   });
 }
@@ -271,18 +343,6 @@ export function useAddCashMovement() {
   });
 }
 
-// ── Terminales ──
-export function useTerminals() {
-  return useQuery<OpsTerminal[]>({ queryKey: ['ops', 'terminals'], queryFn: () => safeGet('/api/v1/ops/terminals') });
-}
-export function useSaveTerminal() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, ...dto }: Partial<OpsTerminal> & { name: string }) =>
-      id ? api.put(`/api/v1/ops/terminals/${id}`, dto) : api.post('/api/v1/ops/terminals', dto),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'terminals'] }),
-  });
-}
 
 // ── Sub-usuarios (solo Administrador) ──
 export function useOpsUsers() {
@@ -298,6 +358,19 @@ export function useSaveOpsUser() {
 }
 
 // ── Solicitudes de compra ──
+// Gestores (consulta: todos; alta/edición: Administrador y Observador)
+export function useOpsManagers() {
+  return useQuery<OpsManager[]>({ queryKey: ['ops', 'managers'], queryFn: () => safeGet('/api/v1/ops/managers') });
+}
+export function useSaveOpsManager() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id?: string; dto: SaveOpsManager }) =>
+      id ? api.put(`/api/v1/ops/managers/${id}`, dto) : api.post('/api/v1/ops/managers', dto),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'managers'] }),
+  });
+}
+
 export function usePurchaseRequests(status?: string) {
   return useQuery<OpsPurchaseRequest[]>({
     queryKey: ['ops', 'purchase-requests', status],
@@ -337,6 +410,26 @@ export function useCreatePurchase() {
       qc.invalidateQueries({ queryKey: ['ops', 'purchases'] });
       qc.invalidateQueries({ queryKey: ['ops', 'products'] });
       qc.invalidateQueries({ queryKey: ['ops', 'purchase-requests'] });
+    },
+  });
+}
+export function useUpdatePurchase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id: string; dto: UpdateOpsPurchase }) => api.put(`/api/v1/ops/purchases/${id}`, dto),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ops', 'purchases'] });
+      qc.invalidateQueries({ queryKey: ['ops', 'products'] });
+    },
+  });
+}
+export function useCancelPurchase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => api.post(`/api/v1/ops/purchases/${id}/cancel`, { reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ops', 'purchases'] });
+      qc.invalidateQueries({ queryKey: ['ops', 'products'] });
     },
   });
 }
@@ -395,6 +488,14 @@ export function useCloseCount() {
       qc.invalidateQueries({ queryKey: ['ops', 'counts'] });
       qc.invalidateQueries({ queryKey: ['ops', 'products'] });
     },
+  });
+}
+export function useSetCountItemAudited() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, productId, audited }: { id: string; productId: string; audited: boolean }) =>
+      api.patch(`/api/v1/ops/inventory/counts/${id}/items/${productId}/audit`, { audited }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'counts'] }),
   });
 }
 
@@ -513,6 +614,15 @@ export function useMonthlyDashboard(year?: number) {
     },
   });
 }
+export function useDashboardSummary(params: { from?: string; to?: string }) {
+  return useQuery<DashboardSummary>({
+    queryKey: ['ops', 'reports', 'dashboard', 'summary', params],
+    queryFn: async () => {
+      const res = await api.get('/api/v1/ops/reports/dashboard/summary', { params });
+      return (res.data?.data ?? res.data) as DashboardSummary;
+    },
+  });
+}
 export function useSalesReport(params?: { from?: string; to?: string }) {
   return useQuery<SalesReport>({
     queryKey: ['ops', 'reports', 'sales', params],
@@ -550,4 +660,82 @@ export function useExpensesReport(params?: { from?: string; to?: string }) {
 }
 export function useExportExpensesReport() {
   return useMutation({ mutationFn: (params?: { from?: string; to?: string }) => downloadBlob('/api/v1/ops/reports/expenses/export', params, 'reporte-gastos.xlsx') });
+}
+
+// ── Sincronización Local ↔ Online ──
+export function useSyncHistory(take = 20) {
+  return useQuery<SyncHistoryEntry[]>({
+    queryKey: ['ops', 'sync', 'history', take],
+    queryFn: () => safeGet('/api/v1/sync/history', { take }),
+  });
+}
+export function useSyncPush() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/api/v1/sync/push');
+      return (res.data?.data ?? res.data) as SyncPushResult;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'sync', 'history'] }),
+  });
+}
+export function useSyncPull() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/api/v1/sync/pull');
+      return (res.data?.data ?? res.data) as SyncPullResult;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'sync', 'history'] }),
+  });
+}
+// Solo backend Online: genera/revoca la API key que el dueño del negocio copia a
+// Sync__ApiKey en su instalación Local.
+export function useGenerateSyncApiKey() {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/api/v1/sync/api-key');
+      return (res.data?.data ?? res.data) as SyncApiKeyResult;
+    },
+  });
+}
+export function useRevokeSyncApiKey() {
+  return useMutation({ mutationFn: () => api.delete('/api/v1/sync/api-key') });
+}
+// Emparejamiento automático (Local): el dueño entrega URL + email/contraseña de su cuenta
+// online; el backend hace login y genera la key por su cuenta, sin que nadie la copie.
+export function useSyncConnectionStatus() {
+  return useQuery<SyncConnectionStatus>({
+    queryKey: ['ops', 'sync', 'connection'],
+    queryFn: () => safeGet('/api/v1/sync/connection'),
+  });
+}
+export function useConnectSync() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto: { email: string; password: string }) => {
+      const res = await api.post('/api/v1/sync/connect', dto);
+      return (res.data?.data ?? res.data) as SyncConnectionStatus;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'sync', 'connection'] }),
+  });
+}
+export function useDisconnectSync() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete('/api/v1/sync/connect'),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'sync', 'connection'] }),
+  });
+}
+// Emparejamiento manual (Local): el dueño genera la clave en su cuenta online y la pega aquí,
+// en vez de escribir su contraseña. El backend la valida contra el online antes de guardarla.
+export function useConnectSyncWithApiKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto: { apiKey: string }) => {
+      const res = await api.post('/api/v1/sync/connect/api-key', dto);
+      return (res.data?.data ?? res.data) as SyncConnectionStatus;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'sync', 'connection'] }),
+  });
 }

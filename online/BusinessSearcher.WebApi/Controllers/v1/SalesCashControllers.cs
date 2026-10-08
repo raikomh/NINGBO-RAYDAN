@@ -3,7 +3,6 @@ using BusinessSearcher.API.Controllers;
 using BusinessSearcher.Application.DTOs.Operations;
 using BusinessSearcher.Application.Features.Operations.CashRegisters;
 using BusinessSearcher.Application.Features.Operations.Sales;
-using BusinessSearcher.Application.Features.Operations.Terminals;
 using BusinessSearcher.Domain.BoundedContext.Operations.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -60,26 +59,6 @@ namespace BusinessSearcher.API.Controllers.v1
                     : "El archivo contiene errores. Revisa el detalle.";
             return Ok(result, message);
         }
-    }
-
-    /// <summary>Terminales / puntos de cobro (TPV/ERP).</summary>
-    [Authorize]
-    [Route("api/v1/ops/terminals")]
-    public class OpsTerminalsController : BaseApiController
-    {
-        [HttpGet]
-        public async Task<IActionResult> GetAll(CancellationToken ct)
-            => Ok(await Mediator.Send(new GetTerminalsQuery(), ct));
-
-        [HttpPost]
-        [OpsRoles]
-        public async Task<IActionResult> Create([FromBody] CreateTerminalDto dto, CancellationToken ct)
-            => StatusCode(201, new { success = true, message = "Terminal creada.", data = await Mediator.Send(new CreateTerminalCommand(dto), ct) });
-
-        [HttpPut("{id:guid}")]
-        [OpsRoles]
-        public async Task<IActionResult> Update(Guid id, [FromBody] CreateTerminalDto dto, CancellationToken ct)
-            => Ok(await Mediator.Send(new UpdateTerminalCommand(id, dto), ct), "Terminal actualizada.");
     }
 
     /// <summary>Caja / arqueo (TPV/ERP).</summary>

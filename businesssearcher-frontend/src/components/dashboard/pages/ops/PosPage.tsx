@@ -5,10 +5,12 @@ import {
   ToggleButtonGroup, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress,
 } from '@mui/material';
 import { Add, Remove, DeleteOutline, PointOfSale, Search, Print, CheckCircle } from '@mui/icons-material';
-import { useOpsProducts, useWarehouses, useCurrentCashRegister, useCreateSale, useExchangeRate, useTerminals, fetchProductByBarcode } from '@/hooks/useOps';
+import { useOpsProducts, useWarehouses, useCurrentCashRegister, useCreateSale, useOpsManagers, useExchangeRate, fetchProductByBarcode } from '@/hooks/useOps';
 import type { OpsProduct, OpsCurrency, OpsPaymentMethod, CreateOpsSale, OpsSale } from '@/lib/opsTypes';
 import { useNavigate } from 'react-router-dom';
 import SaleReceipt from './SaleReceipt';
+import OrdenEntregaReceipt, { type OrdenEntregaDeliveryInfo } from './OrdenEntregaReceipt';
+import CashDenominationBreakdown from './CashDenominationBreakdown';
 
 interface CartLine {
   product: OpsProduct;
@@ -22,19 +24,24 @@ export default function PosPage() {
   const { data: warehouses } = useWarehouses();
   const { data: register } = useCurrentCashRegister();
   const { data: rate } = useExchangeRate();
-  const { data: terminals } = useTerminals();
   const [warehouseId, setWarehouseId] = useState('');
-  const [terminalId, setTerminalId] = useState('');
   const [search, setSearch] = useState('');
 
-  // Al abrir/cambiar la caja, preselecciona la terminal con la que se abrió (si tiene una).
-  useEffect(() => { setTerminalId(register?.terminalId ?? ''); }, [register?.id]);
+  // Al abrir/cambiar la caja, preselecciona la terminal y el almacén con los que se abrió (si tiene).
+  // Sin esto, "effectiveWarehouse" caía al primer almacén de la lista aunque la caja se hubiera
+  // abierto contra otro: el producto se veía en stock (con el stock de OTRO almacén) pero al
+  // vender, AdjustStock validaba el almacén real y tiraba "Stock insuficiente" — se sentía como
+  // si la caja abierta no dejara vender.
+  useEffect(() => { setWarehouseId(register?.warehouseId ?? ''); }, [register?.id]);
   const { data: products, isLoading } = useOpsProducts({ search: search || undefined, warehouseId: warehouseId || undefined });
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [currency, setCurrency] = useState<OpsCurrency>('CUP');
   const [payDialog, setPayDialog] = useState(false);
   const [lastSale, setLastSale] = useState<OpsSale | null>(null);
+  const [lastDelivery, setLastDelivery] = useState<OrdenEntregaDeliveryInfo | null>(null);
+  const [lastCodeByProductId, setLastCodeByProductId] = useState<Record<string, string | undefined>>({});
+  const [printTarget, setPrintTarget] = useState<'ticket' | 'orden'>('ticket');
   const createSale = useCreateSale();
 
   const effectiveWarehouse = warehouseId || warehouses?.[0]?.id || '';
@@ -47,10 +54,17 @@ export default function PosPage() {
       usd: s?.sellPriceUSD ?? p.sellPriceUSD,
     };
   };
+  // Si la venta es en USD y el producto no tiene precio propio en USD, NUNCA reutiliza el número
+  // de sellPrice (CUP) tal cual — eso mezclaría unidades (un producto de 300 CUP se cobraría como
+  // 300 USD). Se convierte con la tasa vigente; si no hay tasa, no se puede tasar en USD.
   const priceOf = (p: OpsProduct) => {
     const { cup, usd } = priceAt(p);
-    return currency === 'USD' && usd != null ? usd : cup;
+    if (currency !== 'USD') return cup;
+    if (usd != null) return usd;
+    if (rate?.rate) return Math.round((cup / rate.rate) * 100) / 100;
+    return null;
   };
+  const isPriceable = (p: OpsProduct) => priceOf(p) != null;
   const stockOf = (p: OpsProduct) =>
     (p.stocks.find((s) => s.warehouseId === effectiveWarehouse)?.quantity ?? p.totalStock);
 
@@ -80,23 +94,26 @@ export default function PosPage() {
     setCart((c) => c.map((l) => (l.product.id === id ? { ...l, quantity: Math.max(1, q) } : l)));
   const setDisc = (id: string, v: number) =>
     setCart((c) => c.map((l) => (l.product.id === id ? { ...l, discountValue: Math.max(0, v) } : l)));
+  const setDiscType = (id: string, t: 'Amount' | 'Percentage') =>
+    setCart((c) => c.map((l) => (l.product.id === id ? { ...l, discountType: t } : l)));
   const remove = (id: string) => setCart((c) => c.filter((l) => l.product.id !== id));
 
   const lineTotal = (l: CartLine) => {
-    const gross = priceOf(l.product) * l.quantity;
+    const gross = (priceOf(l.product) ?? 0) * l.quantity;
     const disc = l.discountType === 'Percentage' ? gross * (l.discountValue / 100) : l.discountValue;
     return Math.max(0, gross - disc);
   };
-  const subtotal = useMemo(() => cart.reduce((s, l) => s + priceOf(l.product) * l.quantity, 0), [cart, currency]);
+  const subtotal = useMemo(() => cart.reduce((s, l) => s + (priceOf(l.product) ?? 0) * l.quantity, 0), [cart, currency]);
   const total = useMemo(() => cart.reduce((s, l) => s + lineTotal(l), 0), [cart, currency]);
+  const hasUnpriceableLine = cart.some((l) => !isPriceable(l.product));
 
-  const canSell = !!register && register.status === 'Open' && cart.length > 0 && !!effectiveWarehouse;
+  const canSell = !!register && register.status === 'Open' && cart.length > 0 && !!effectiveWarehouse && !hasUnpriceableLine;
 
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2} mb={2}>
         <Typography variant="h5" fontWeight={700}>Punto de Venta</Typography>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
           {rate && <Chip label={`Tasa: ${rate.rate} CUP/USD`} size="small" variant="outlined" />}
           {register?.status === 'Open'
             ? <Chip color="success" label="Caja abierta" />
@@ -115,17 +132,13 @@ export default function PosPage() {
         <Grid item xs={12} md={7}>
           <Card variant="outlined">
             <CardContent>
-              <Stack direction="row" spacing={1.5} mb={2}>
+              <Stack direction="row" spacing={1.5} mb={2} flexWrap="wrap">
                 <TextField size="small" fullWidth placeholder="Buscar producto o escanear código…" value={search}
                   onChange={(e) => setSearch(e.target.value)} onKeyDown={handleSearchKeyDown}
                   InputProps={{ startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> }} />
-                <TextField size="small" select label="Almacén" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} sx={{ minWidth: 150 }}>
+                <TextField size="small" select label="Almacén" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} sx={{ minWidth: 150, flex: '1 1 150px' }}>
                   <MenuItem value="">{warehouses?.[0]?.name ?? 'Principal'}</MenuItem>
                   {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-                </TextField>
-                <TextField size="small" select label="Terminal" value={terminalId} onChange={(e) => setTerminalId(e.target.value)} sx={{ minWidth: 150 }}>
-                  <MenuItem value="">— Sin asignar —</MenuItem>
-                  {terminals?.filter((t) => t.isActive).map((t) => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
                 </TextField>
               </Stack>
               {isLoading ? (
@@ -134,14 +147,22 @@ export default function PosPage() {
                 <Grid container spacing={1}>
                   {(products ?? []).filter((p) => p.forSale).map((p) => {
                     const st = stockOf(p);
+                    const priceable = isPriceable(p);
+                    const sellable = st > 0 && priceable;
+                    const price = priceOf(p);
                     return (
                       <Grid item xs={6} sm={4} key={p.id}>
-                        <Card variant="outlined" sx={{ cursor: st > 0 ? 'pointer' : 'not-allowed', opacity: st > 0 ? 1 : 0.5, height: '100%' }}
-                          onClick={() => st > 0 && addToCart(p)}>
+                        <Card variant="outlined" sx={{ cursor: sellable ? 'pointer' : 'not-allowed', opacity: sellable ? 1 : 0.5, height: '100%' }}
+                          onClick={() => sellable && addToCart(p)}>
                           <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                             <Typography variant="body2" fontWeight={600} noWrap>{p.name}</Typography>
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              {currency === 'USD' && priceAt(p).usd != null ? `$${priceAt(p).usd!.toFixed(2)}` : `${priceAt(p).cup.toFixed(2)} CUP`}
+                            {p.barcode && (
+                              <Typography variant="caption" color="text.secondary" display="block" noWrap>{p.barcode}</Typography>
+                            )}
+                            <Typography variant="caption" color={priceable ? 'text.secondary' : 'error'} display="block">
+                              {currency === 'USD'
+                                ? (price != null ? `${priceAt(p).usd != null ? '' : '≈ '}$${price.toFixed(2)}` : 'Sin precio USD')
+                                : `${priceAt(p).cup.toFixed(2)} CUP`}
                             </Typography>
                             <Chip size="small" label={`Stock ${st}`} color={st <= p.minStock ? 'warning' : 'default'} sx={{ mt: 0.5 }} />
                           </CardContent>
@@ -173,14 +194,24 @@ export default function PosPage() {
                   <ListItem key={l.product.id} alignItems="flex-start" sx={{ px: 0 }}
                     secondaryAction={<IconButton edge="end" size="small" onClick={() => remove(l.product.id)}><DeleteOutline fontSize="small" /></IconButton>}>
                     <ListItemText
-                      primary={<Typography variant="body2" fontWeight={600}>{l.product.name}</Typography>}
+                      primary={
+                        <Typography variant="body2" fontWeight={600}>
+                          {l.product.name}
+                          {!isPriceable(l.product) && <Typography component="span" variant="caption" color="error"> · sin precio en {currency}</Typography>}
+                        </Typography>
+                      }
                       secondary={
-                        <Stack direction="row" spacing={1} alignItems="center" mt={0.5}>
+                        <Stack direction="row" spacing={1} alignItems="center" mt={0.5} flexWrap="wrap">
                           <IconButton size="small" onClick={() => setQty(l.product.id, l.quantity - 1)}><Remove fontSize="inherit" /></IconButton>
                           <Typography variant="body2">{l.quantity}</Typography>
                           <IconButton size="small" onClick={() => setQty(l.product.id, l.quantity + 1)}><Add fontSize="inherit" /></IconButton>
-                          <TextField size="small" type="number" label="Desc." value={l.discountValue}
-                            onChange={(e) => setDisc(l.product.id, Number(e.target.value))} sx={{ width: 90 }} />
+                          <TextField size="small" type="number" label="Desc." value={l.discountValue === 0 ? '' : l.discountValue}
+                            onChange={(e) => setDisc(l.product.id, e.target.value === '' ? 0 : Number(e.target.value))} sx={{ width: 80 }} />
+                          <ToggleButtonGroup size="small" exclusive value={l.discountType}
+                            onChange={(_, v) => v && setDiscType(l.product.id, v)}>
+                            <ToggleButton value="Amount" sx={{ px: 0.75, py: 0.25 }}>$</ToggleButton>
+                            <ToggleButton value="Percentage" sx={{ px: 0.75, py: 0.25 }}>%</ToggleButton>
+                          </ToggleButtonGroup>
                           <Typography variant="body2" fontWeight={600} ml="auto">{lineTotal(l).toFixed(2)}</Typography>
                         </Stack>
                       } />
@@ -193,7 +224,19 @@ export default function PosPage() {
                 <Box display="flex" justifyContent="space-between"><Typography variant="body2">Subtotal</Typography><Typography variant="body2">{subtotal.toFixed(2)}</Typography></Box>
                 <Box display="flex" justifyContent="space-between"><Typography variant="body2">Descuento</Typography><Typography variant="body2">{(subtotal - total).toFixed(2)}</Typography></Box>
                 <Box display="flex" justifyContent="space-between"><Typography variant="h6" fontWeight={800}>Total</Typography><Typography variant="h6" fontWeight={800}>{total.toFixed(2)} {currency}</Typography></Box>
+                {rate?.rate && (
+                  <Box display="flex" justifyContent="flex-end">
+                    <Typography variant="caption" color="text.secondary">
+                      {currency === 'CUP' ? `≈ $${(total / rate.rate).toFixed(2)} USD` : `≈ ${(total * rate.rate).toFixed(2)} CUP`}
+                    </Typography>
+                  </Box>
+                )}
               </Stack>
+              {hasUnpriceableLine && (
+                <Alert severity="error" sx={{ mt: 1.5 }}>
+                  Hay productos sin precio en {currency}. Configúrales un precio en USD o define una tasa de cambio en Ajustes para poder venderlos en {currency}.
+                </Alert>
+              )}
               <Button fullWidth variant="contained" size="large" sx={{ mt: 2 }} startIcon={<PointOfSale />}
                 disabled={!canSell} onClick={() => setPayDialog(true)}>Cobrar</Button>
             </CardContent>
@@ -206,13 +249,13 @@ export default function PosPage() {
           total={total}
           currency={currency}
           onClose={() => setPayDialog(false)}
-          onConfirm={(method, cashTendered) => {
+          onConfirm={(method, cashTendered, managerCode, delivery) => {
             const dto: CreateOpsSale = {
               registerId: register.id,
+              managerCode,
               paymentMethod: method,
               paymentCurrency: currency,
               exchangeRate: rate?.rate,
-              terminalName: terminals?.find((t) => t.id === terminalId)?.name,
               items: cart.map((l) => ({
                 productId: l.product.id,
                 warehouseId: effectiveWarehouse,
@@ -227,29 +270,42 @@ export default function PosPage() {
                 changeCurrency: currency,
               }],
             };
+            const codeByProductId = Object.fromEntries(cart.map((l) => [l.product.id, l.product.barcode]));
             createSale.mutate(dto, {
-              onSuccess: (sale) => { setCart([]); setPayDialog(false); setLastSale(sale); },
+              onSuccess: (sale) => {
+                setCart([]); setPayDialog(false); setLastSale(sale);
+                setLastDelivery(delivery ?? null); setLastCodeByProductId(codeByProductId); setPrintTarget('ticket');
+              },
             });
           }}
           pending={createSale.isPending}
           error={createSale.isError}
+          errorMessage={(createSale.error as { response?: { data?: { message?: string } } })?.response?.data?.message}
         />
       )}
 
       {lastSale && (
         <Dialog open onClose={() => setLastSale(null)} maxWidth="xs" fullWidth>
-          <SaleReceipt sale={lastSale} />
+          <SaleReceipt sale={lastSale} className={printTarget === 'ticket' ? 'receipt-print-area' : undefined} />
+          <OrdenEntregaReceipt sale={lastSale} delivery={lastDelivery} codeByProductId={lastCodeByProductId}
+            className={printTarget === 'orden' ? 'receipt-print-area' : undefined} />
           <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CheckCircle color="success" fontSize="small" /> Venta registrada
           </DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary">
               Total: <strong>{lastSale.total.toFixed(2)} {lastSale.paymentCurrency}</strong>
+              {lastSale.totalUSD != null && lastSale.paymentCurrency !== 'USD' && (
+                <> (${lastSale.totalUSD.toFixed(2)} USD)</>
+              )}
             </Typography>
           </DialogContent>
-          <DialogActions>
+          <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
             <Button onClick={() => setLastSale(null)}>Cerrar</Button>
-            <Button variant="contained" startIcon={<Print />} onClick={() => window.print()}>Imprimir recibo</Button>
+            <Button variant="outlined" startIcon={<Print />}
+              onClick={() => { setPrintTarget('ticket'); setTimeout(() => window.print(), 50); }}>Imprimir recibo</Button>
+            <Button variant="contained" startIcon={<Print />}
+              onClick={() => { setPrintTarget('orden'); setTimeout(() => window.print(), 50); }}>Imprimir orden de entrega</Button>
           </DialogActions>
         </Dialog>
       )}
@@ -257,13 +313,29 @@ export default function PosPage() {
   );
 }
 
-function PaymentDialog({ total, currency, onClose, onConfirm, pending, error }: {
+function PaymentDialog({ total, currency, onClose, onConfirm, pending, error, errorMessage }: {
   total: number; currency: OpsCurrency; onClose: () => void;
-  onConfirm: (method: OpsPaymentMethod, cashTendered?: number) => void; pending: boolean; error: boolean;
+  onConfirm: (method: OpsPaymentMethod, cashTendered: number | undefined, managerCode: string,
+    delivery: OrdenEntregaDeliveryInfo) => void;
+  pending: boolean; error: boolean; errorMessage?: string;
 }) {
   const [method, setMethod] = useState<OpsPaymentMethod>('Cash');
-  const [tendered, setTendered] = useState(total);
-  const change = Math.max(0, tendered - total);
+  const [tendered, setTendered] = useState<number | ''>(total);
+  const tenderedValue = tendered === '' ? 0 : tendered;
+  const [managerCode, setManagerCode] = useState('');
+  const { data: managers } = useOpsManagers();
+  const manager = (managers ?? []).find((m) => m.isActive && m.code.toUpperCase() === managerCode.trim().toUpperCase());
+  const change = Math.max(0, tenderedValue - total);
+
+  // Datos para la Orden de Entrega impresa (no se guardan en el sistema todavía, solo se usan
+  // para generar ese documento al confirmar la venta).
+  const [showDelivery, setShowDelivery] = useState(false);
+  const [cliente, setCliente] = useState('');
+  const [ci, setCi] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [direccion, setDireccion] = useState('');
+  const [domicilio, setDomicilio] = useState<number | ''>('');
+
   return (
     <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>Cobro — {total.toFixed(2)} {currency}</DialogTitle>
@@ -274,22 +346,45 @@ function PaymentDialog({ total, currency, onClose, onConfirm, pending, error }: 
             <ToggleButton value="Card">Tarjeta</ToggleButton>
             <ToggleButton value="Transfer">Transf.</ToggleButton>
           </ToggleButtonGroup>
+          <TextField size="small" label="Código del gestor" value={managerCode} autoFocus
+            onChange={(e) => setManagerCode(e.target.value)}
+            error={!!managerCode.trim() && !manager}
+            helperText={manager ? manager.name : managerCode.trim() ? 'No existe un gestor activo con ese código' : 'Gestor que realizó la venta'} />
           {method === 'Cash' && (
             <>
               <TextField size="small" type="number" label="Efectivo recibido" value={tendered}
-                onChange={(e) => setTendered(Number(e.target.value))} />
+                onChange={(e) => setTendered(e.target.value === '' ? '' : Number(e.target.value))} />
+              <CashDenominationBreakdown currency={currency} onApply={(t) => setTendered(t)} />
               <Box display="flex" justifyContent="space-between">
                 <Typography>Cambio</Typography><Typography fontWeight={700}>{change.toFixed(2)} {currency}</Typography>
               </Box>
             </>
           )}
-          {error && <Alert severity="error">No se pudo registrar la venta (¿stock suficiente / caja abierta?).</Alert>}
+          <Button size="small" onClick={() => setShowDelivery((v) => !v)} sx={{ alignSelf: 'flex-start' }}>
+            {showDelivery ? 'Ocultar' : 'Agregar'} datos de entrega (opcional)
+          </Button>
+          {showDelivery && (
+            <Stack spacing={1.5}>
+              <TextField size="small" label="Cliente" value={cliente} onChange={(e) => setCliente(e.target.value)} />
+              <Stack direction="row" spacing={1.5}>
+                <TextField size="small" label="CI" value={ci} onChange={(e) => setCi(e.target.value)} fullWidth />
+                <TextField size="small" label="Teléfono" value={telefono} onChange={(e) => setTelefono(e.target.value)} fullWidth />
+              </Stack>
+              <TextField size="small" label="Dirección" value={direccion} onChange={(e) => setDireccion(e.target.value)} />
+              <TextField size="small" type="number" label="Domicilio (costo de envío)" value={domicilio}
+                onChange={(e) => setDomicilio(e.target.value === '' ? '' : Number(e.target.value))} />
+            </Stack>
+          )}
+          {error && <Alert severity="error">{errorMessage || 'No se pudo registrar la venta (¿stock suficiente / caja abierta?).'}</Alert>}
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancelar</Button>
-        <Button variant="contained" disabled={pending || (method === 'Cash' && tendered < total)}
-          onClick={() => onConfirm(method, tendered)}>Confirmar venta</Button>
+        <Button variant="contained" disabled={pending || !manager || (method === 'Cash' && tenderedValue < total)}
+          onClick={() => onConfirm(method, tenderedValue, manager!.code, {
+            cliente: cliente || undefined, ci: ci || undefined, telefono: telefono || undefined,
+            direccion: direccion || undefined, domicilio: domicilio === '' ? undefined : domicilio,
+          })}>Confirmar venta</Button>
       </DialogActions>
     </Dialog>
   );

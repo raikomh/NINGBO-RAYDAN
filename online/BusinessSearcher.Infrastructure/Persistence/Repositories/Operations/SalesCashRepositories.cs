@@ -40,21 +40,6 @@ namespace BusinessSearcher.Infrastructure.Persistence.Repositories.Operations
         public Task UpdateAsync(Sale sale, CancellationToken ct = default) { _db.Sales.Update(sale); return Task.CompletedTask; }
     }
 
-    public class TerminalRepository : ITerminalRepository
-    {
-        private readonly OperationsDbContext _db;
-        public TerminalRepository(OperationsDbContext db) => _db = db;
-
-        public Task<Terminal?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default)
-            => _db.Terminals.FirstOrDefaultAsync(t => t.TenantId == tenantId && t.Id == id, ct);
-
-        public async Task<IReadOnlyList<Terminal>> GetByTenantAsync(Guid tenantId, CancellationToken ct = default)
-            => await _db.Terminals.Where(t => t.TenantId == tenantId).OrderBy(t => t.Name).ToListAsync(ct);
-
-        public async Task AddAsync(Terminal terminal, CancellationToken ct = default) => await _db.Terminals.AddAsync(terminal, ct);
-        public Task UpdateAsync(Terminal terminal, CancellationToken ct = default) { _db.Terminals.Update(terminal); return Task.CompletedTask; }
-    }
-
     public class CashRegisterRepository : ICashRegisterRepository
     {
         private readonly OperationsDbContext _db;

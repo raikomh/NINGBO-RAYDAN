@@ -17,13 +17,12 @@ namespace BusinessSearcher.Application.DTOs.Sync
         IReadOnlyList<SyncPurchaseDto> Purchases,
         IReadOnlyList<SyncInventoryMovementDto> InventoryMovements,
         IReadOnlyList<SyncCashRegisterDto> CashRegisters,
-        IReadOnlyList<SyncTerminalDto> Terminals,
         IReadOnlyList<SyncOperationsUserDto> OperationsUsers,
         IReadOnlyList<SyncExpenseDto> Expenses)
     {
         public int TotalItems =>
             BusinessInfos.Count + Suppliers.Count + Warehouses.Count + Categories.Count + Products.Count +
-            Sales.Count + Purchases.Count + InventoryMovements.Count + CashRegisters.Count + Terminals.Count +
+            Sales.Count + Purchases.Count + InventoryMovements.Count + CashRegisters.Count +
             OperationsUsers.Count + Expenses.Count;
     }
 
@@ -100,9 +99,9 @@ namespace BusinessSearcher.Application.DTOs.Sync
     public record SyncSaleDto(
         Guid Id, Guid TenantId, DateTime CreatedAt, DateTime? UpdatedAt,
         DateTime Date, decimal Subtotal, decimal Discount, decimal Total, decimal? SubtotalUSD, decimal? TotalUSD,
-        decimal? TaxAmount, string PaymentMethod, Guid CashierId, Guid RegisterId, string? TerminalName,
+        decimal? TaxAmount, string PaymentMethod, Guid CashierId, Guid RegisterId, string? WarehouseName,
         string PaymentCurrency, decimal? ExchangeRate, string Status,
-        IReadOnlyList<SyncSaleItemDto> Items, IReadOnlyList<SyncSalePaymentDto> Payments);
+        IReadOnlyList<SyncSaleItemDto> Items, IReadOnlyList<SyncSalePaymentDto> Payments, string? ManagerCode = null);
 
     // ── Compras ───────────────────────────────────────────────────────────────
 
@@ -127,10 +126,6 @@ namespace BusinessSearcher.Application.DTOs.Sync
 
     // ── Caja ──────────────────────────────────────────────────────────────────
 
-    public record SyncTerminalDto(
-        Guid Id, Guid TenantId, DateTime CreatedAt, DateTime? UpdatedAt,
-        string Name, string? Description, Guid? WarehouseId, bool IsActive);
-
     public record SyncCashMovementDto(
         Guid Id, Guid TenantId, DateTime CreatedAt, DateTime? UpdatedAt,
         Guid RegisterId, DateTime Date, string Type, decimal Amount, decimal? AmountUSD,
@@ -138,7 +133,7 @@ namespace BusinessSearcher.Application.DTOs.Sync
 
     public record SyncCashRegisterDto(
         Guid Id, Guid TenantId, DateTime CreatedAt, DateTime? UpdatedAt,
-        Guid? WarehouseId, Guid? TerminalId, DateTime OpenDate, DateTime? CloseDate,
+        Guid? WarehouseId, DateTime OpenDate, DateTime? CloseDate,
         decimal InitialAmount, decimal? ExpectedAmount, decimal? ActualAmount, decimal? Difference,
         decimal? InitialAmountUSD, decimal? ExpectedAmountUSD, decimal? ActualAmountUSD, decimal? DifferenceUSD,
         string Status, Guid OpenedBy, Guid? ClosedBy, int SalesCount, decimal TotalSales, decimal TotalExpenses,

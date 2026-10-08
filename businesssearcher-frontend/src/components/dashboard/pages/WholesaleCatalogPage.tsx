@@ -86,7 +86,7 @@ export default function WholesaleCatalogPage() {
             value={city}
             onChange={(e) => setCity(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            sx={{ width: 180 }}
+            sx={{ width: { xs: '100%', sm: 180 } }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">

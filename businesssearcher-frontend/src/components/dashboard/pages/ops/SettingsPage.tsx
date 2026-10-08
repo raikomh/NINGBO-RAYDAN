@@ -5,24 +5,35 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, FormControlLabel, Switch, Divider,
 } from '@mui/material';
 import {
-  CurrencyExchange, Storefront, PointOfSale, Add, Edit,
-  PowerSettingsNew, Block, LocationOn, AccessTime, Settings as SettingsIcon,
+  CurrencyExchange, Storefront, Add, Edit, Delete,
+  PowerSettingsNew, Block, LocationOn, AccessTime, Settings as SettingsIcon, Badge, Public,
 } from '@mui/icons-material';
 import {
   useExchangeRate, useExchangeRateHistory, useSetExchangeRate, useBusinessInfo, useSaveBusinessInfo,
-  useTerminals, useSaveTerminal, useWarehouses, useSettings, useSaveSetting,
+  useWarehouses, useSettings, useSaveSetting,
+  useRoleSalaryConfigs, useSaveRoleSalaryConfig, useDeleteRoleSalaryConfig,
 } from '@/hooks/useOps';
 import { useStore, useActivateStore, useDeactivateStore } from '@/hooks/useStores';
+import { useAuth } from '@/context/AuthContext';
 import StoreDialog from '@/components/dashboard/dialogs/StoreDialog';
 import ScheduleTab from '@/components/dashboard/pages/ScheduleTab';
 import StoreMapTab from '@/components/dashboard/pages/StoreMapTab';
-import type { SaveOpsBusinessInfo, OpsTerminal } from '@/lib/opsTypes';
+import type { SaveOpsBusinessInfo, OpsRole } from '@/lib/opsTypes';
+
+const ROLE_LABEL: Record<OpsRole, string> = {
+  Administrador: 'Administrador', Cajero: 'Cajero', JefeDeTurno: 'Jefe de Turno',
+  Almacenero: 'Almacenero', Comercial: 'Comercial', Auditor: 'Auditor', Observador: 'Observador',
+};
 
 export default function SettingsPage() {
   const { data: current, isLoading } = useExchangeRate();
   const { data: history } = useExchangeRateHistory(30);
   const setRate = useSetExchangeRate();
   const [rate, setRateValue] = useState('');
+  // Admin de plataforma (Chat:AdminEmail), no el "Administrador" operativo del negocio: un valor
+  // mal editado aquí (p.ej. Sync.ApiKey) puede desconfigurar la sincronización online.
+  const { user } = useAuth();
+  const isPlatformAdmin = user?.role === 'admin';
 
   const submit = () => {
     const value = Number(rate);
@@ -38,8 +49,10 @@ export default function SettingsPage() {
 
       <BusinessInfoCard />
       <StoreProfileCard />
-      <TerminalsCard />
-      <SettingsKeyValueCard />
+      <RoleSalaryCard />
+      <MinimoExentoCard />
+      <TimezoneCard />
+      {isPlatformAdmin && <SettingsKeyValueCard />}
 
       <Card variant="outlined" sx={{ mb: 2 }}>
         <CardContent>
@@ -159,7 +172,7 @@ function StoreProfileCard() {
     <>
       <Card variant="outlined" sx={{ mb: 2 }}>
         <CardContent>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} mb={2}>
             <Stack direction="row" spacing={1} alignItems="center">
               <LocationOn fontSize="small" color="primary" />
               <Typography variant="h6" fontWeight={700}>Ubicación y horario</Typography>
@@ -191,7 +204,7 @@ function StoreProfileCard() {
               </Grid>
 
               {statusMsg && <Alert severity="info" sx={{ mb: 2 }} onClose={() => setStatusMsg('')}>{statusMsg}</Alert>}
-              <Stack direction="row" spacing={1.5} mb={3}>
+              <Stack direction="row" spacing={1.5} flexWrap="wrap" mb={3}>
                 <Button size="small" variant="outlined" color="success" startIcon={<PowerSettingsNew />}
                   disabled={activateMutation.isPending || deactivateMutation.isPending}
                   onClick={async () => { await activateMutation.mutateAsync(); setStatusMsg('Tienda activada correctamente.'); }}>
@@ -224,55 +237,191 @@ function StoreProfileCard() {
   );
 }
 
-function TerminalsCard() {
-  const { data: terminals, isLoading } = useTerminals();
-  const { data: warehouses } = useWarehouses();
-  const [dialogTerminal, setDialogTerminal] = useState<OpsTerminal | 'new' | null>(null);
+function RoleSalaryCard() {
+  const { data: configs, isLoading, isError } = useRoleSalaryConfigs();
+  const save = useSaveRoleSalaryConfig();
+  const del = useDeleteRoleSalaryConfig();
+  const [editing, setEditing] = useState<Record<string, { baseSalary: string; salesPercentage: string }>>({});
 
-  const whName = (id?: string) => warehouses?.find((w) => w.id === id)?.name ?? '—';
+  const startEdit = (role: OpsRole, baseSalary: number, salesPercentage: number) =>
+    setEditing((e) => ({ ...e, [role]: { baseSalary: String(baseSalary), salesPercentage: String(salesPercentage) } }));
+  const cancelEdit = (role: string) => setEditing((e) => { const n = { ...e }; delete n[role]; return n; });
+
+  const submit = (role: OpsRole) => {
+    const draft = editing[role];
+    if (!draft) return;
+    save.mutate(
+      { role, dto: { baseSalary: Number(draft.baseSalary) || 0, salesPercentage: Number(draft.salesPercentage) || 0 } },
+      { onSuccess: () => cancelEdit(role) },
+    );
+  };
 
   return (
     <Card variant="outlined" sx={{ mb: 2 }}>
       <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <PointOfSale fontSize="small" color="primary" />
-            <Typography variant="h6" fontWeight={700}>Terminales</Typography>
-          </Stack>
-          <Button size="small" startIcon={<Add />} onClick={() => setDialogTerminal('new')}>Nueva terminal</Button>
-        </Box>
+        <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+          <Badge fontSize="small" color="primary" />
+          <Typography variant="h6" fontWeight={700}>Roles y salarios</Typography>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+          Salario fijo y % de venta por rol operativo. Solo el Administrador puede ver, modificar o eliminar esta
+          configuración; se usa para calcular el gasto de nómina desde "Gastos".
+        </Typography>
+
+        {isError && <Alert severity="warning" sx={{ mb: 2 }}>Solo el Administrador puede ver y editar los roles.</Alert>}
 
         {isLoading ? (
           <Box display="flex" justifyContent="center" py={3}><CircularProgress /></Box>
-        ) : (
+        ) : !isError && (
           <TableContainer>
             <Table size="small">
               <TableHead>
-                <TableRow><TableCell>Nombre</TableCell><TableCell>Almacén</TableCell><TableCell>Estado</TableCell><TableCell align="right">Acciones</TableCell></TableRow>
+                <TableRow>
+                  <TableCell>Rol</TableCell><TableCell align="right">Salario fijo (CUP)</TableCell>
+                  <TableCell align="right">% de venta</TableCell><TableCell align="right">Acciones</TableCell>
+                </TableRow>
               </TableHead>
               <TableBody>
-                {(terminals ?? []).map((t) => (
-                  <TableRow key={t.id} hover>
-                    <TableCell>{t.name}</TableCell>
-                    <TableCell>{whName(t.warehouseId)}</TableCell>
-                    <TableCell><Chip size="small" color={t.isActive ? 'success' : 'default'} label={t.isActive ? 'Activa' : 'Inactiva'} /></TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={() => setDialogTerminal(t)}><Edit fontSize="small" /></IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(terminals ?? []).length === 0 && (
-                  <TableRow><TableCell colSpan={4} align="center" sx={{ py: 3, color: 'text.secondary' }}>Sin terminales</TableCell></TableRow>
-                )}
+                {(configs ?? []).map((c) => {
+                  const draft = editing[c.role];
+                  return (
+                    <TableRow key={c.role} hover>
+                      <TableCell>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <span>{ROLE_LABEL[c.role]}</span>
+                          {!c.isConfigured && <Chip size="small" label="Sin configurar" variant="outlined" />}
+                        </Stack>
+                      </TableCell>
+                      <TableCell align="right">
+                        {draft ? (
+                          <TextField size="small" type="number" sx={{ width: 120 }} value={draft.baseSalary}
+                            onChange={(e) => setEditing((ed) => ({ ...ed, [c.role]: { ...ed[c.role], baseSalary: e.target.value } }))} />
+                        ) : c.baseSalary.toFixed(2)}
+                      </TableCell>
+                      <TableCell align="right">
+                        {draft ? (
+                          <TextField size="small" type="number" sx={{ width: 90 }} value={draft.salesPercentage}
+                            onChange={(e) => setEditing((ed) => ({ ...ed, [c.role]: { ...ed[c.role], salesPercentage: e.target.value } }))} />
+                        ) : `${c.salesPercentage}%`}
+                      </TableCell>
+                      <TableCell align="right">
+                        {draft ? (
+                          <>
+                            <Button size="small" disabled={save.isPending} onClick={() => submit(c.role)}>Guardar</Button>
+                            <Button size="small" onClick={() => cancelEdit(c.role)}>Cancelar</Button>
+                          </>
+                        ) : (
+                          <>
+                            <IconButton size="small" onClick={() => startEdit(c.role, c.baseSalary, c.salesPercentage)}>
+                              <Edit fontSize="small" />
+                            </IconButton>
+                            {c.isConfigured && (
+                              <IconButton size="small" color="error" disabled={del.isPending} onClick={() => del.mutate(c.role)}>
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            )}
+                          </>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
         )}
+        {save.isError && <Alert severity="error" sx={{ mt: 2 }}>No se pudo guardar el rol.</Alert>}
       </CardContent>
+    </Card>
+  );
+}
 
-      {dialogTerminal && (
-        <TerminalDialog terminal={dialogTerminal === 'new' ? null : dialogTerminal} onClose={() => setDialogTerminal(null)} />
-      )}
+// Mínimo exento: monto de venta por trabajador a partir del cual se paga el % de venta de su rol.
+function MinimoExentoCard() {
+  const { data: settings, isLoading } = useSettings();
+  const save = useSaveSetting();
+  const current = settings?.find((s) => s.key === 'MinimoExento');
+  const [value, setValue] = useState('');
+
+  useEffect(() => { if (current) setValue(current.value); }, [current]);
+
+  const submit = () => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return;
+    save.mutate({ key: 'MinimoExento', value: String(n) });
+  };
+
+  return (
+    <Card variant="outlined" sx={{ mb: 2 }}>
+      <CardContent>
+        <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+          <CurrencyExchange fontSize="small" color="primary" />
+          <Typography variant="h6" fontWeight={700}>Mínimo Exento</Typography>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+          Monto de venta (CUP) por trabajador a partir del cual se paga el % de venta de su rol. Solo el
+          Administrador puede cambiarlo.
+        </Typography>
+
+        {isLoading ? (
+          <Box display="flex" justifyContent="center" py={3}><CircularProgress /></Box>
+        ) : (
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+            <TextField size="small" type="number" label="Mínimo exento (CUP)" value={value}
+              onChange={(e) => setValue(e.target.value)} sx={{ minWidth: 220 }} />
+            <Button variant="contained" disabled={value === '' || Number(value) < 0 || save.isPending} onClick={submit}>
+              Guardar
+            </Button>
+          </Stack>
+        )}
+        {save.isError && <Alert severity="error" sx={{ mt: 2 }}>No se pudo guardar (solo el Administrador puede hacerlo).</Alert>}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Desfase horario del negocio respecto a UTC: las ventas se guardan en UTC, así que sin esto
+// "hoy" en la nómina (y periodos de un día) puede no coincidir con el día real del negocio.
+function TimezoneCard() {
+  const { data: settings, isLoading } = useSettings();
+  const save = useSaveSetting();
+  const current = settings?.find((s) => s.key === 'UtcOffsetHours');
+  const [value, setValue] = useState('');
+
+  useEffect(() => { if (current) setValue(current.value); }, [current]);
+
+  const submit = () => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < -12 || n > 14) return;
+    save.mutate({ key: 'UtcOffsetHours', value: String(n) });
+  };
+
+  return (
+    <Card variant="outlined" sx={{ mb: 2 }}>
+      <CardContent>
+        <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+          <Public fontSize="small" color="primary" />
+          <Typography variant="h6" fontWeight={700}>Zona horaria</Typography>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+          Desfase horario del negocio respecto a UTC (ej. Cuba: -4 en horario de verano, -5 en horario estándar).
+          Se usa para que "hoy" en la nómina coincida con el día real del negocio y no con el día en UTC. Solo el
+          Administrador puede cambiarlo.
+        </Typography>
+
+        {isLoading ? (
+          <Box display="flex" justifyContent="center" py={3}><CircularProgress /></Box>
+        ) : (
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+            <TextField size="small" type="number" label="Desfase (horas, ej. -4)" value={value}
+              onChange={(e) => setValue(e.target.value)} sx={{ minWidth: 220 }} inputProps={{ step: 0.5, min: -12, max: 14 }} />
+            <Button variant="contained" disabled={value === '' || save.isPending} onClick={submit}>
+              Guardar
+            </Button>
+          </Stack>
+        )}
+        {save.isError && <Alert severity="error" sx={{ mt: 2 }}>No se pudo guardar (solo el Administrador puede hacerlo).</Alert>}
+      </CardContent>
     </Card>
   );
 }
@@ -351,38 +500,3 @@ function SettingsKeyValueCard() {
   );
 }
 
-function TerminalDialog({ terminal, onClose }: { terminal: OpsTerminal | null; onClose: () => void }) {
-  const { data: warehouses } = useWarehouses();
-  const save = useSaveTerminal();
-  const [name, setName] = useState(terminal?.name ?? '');
-  const [description, setDescription] = useState(terminal?.description ?? '');
-  const [warehouseId, setWarehouseId] = useState(terminal?.warehouseId ?? '');
-  const [isActive, setIsActive] = useState(terminal?.isActive ?? true);
-
-  const submit = () => {
-    save.mutate({ id: terminal?.id, name, description: description || undefined, warehouseId: warehouseId || undefined, isActive },
-      { onSuccess: onClose });
-  };
-
-  return (
-    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>{terminal ? 'Editar terminal' : 'Nueva terminal'}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField size="small" label="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
-          <TextField size="small" label="Descripción (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <TextField size="small" select label="Almacén asignado" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-            <MenuItem value="">Sin asignar</MenuItem>
-            {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-          </TextField>
-          {terminal && <FormControlLabel control={<Switch checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />} label="Activa" />}
-          {save.isError && <Alert severity="error">No se pudo guardar la terminal.</Alert>}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancelar</Button>
-        <Button variant="contained" disabled={!name || save.isPending} onClick={submit}>Guardar</Button>
-      </DialogActions>
-    </Dialog>
-  );
-}

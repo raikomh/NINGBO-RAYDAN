@@ -54,7 +54,7 @@ export default function InventoryPage() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2} mb={3}>
         <Typography variant="h5" fontWeight={700}>Inventario</Typography>
-        <Stack direction="row" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} flexWrap="wrap">
           <Button startIcon={<WarehouseOutlined />} variant="outlined" onClick={() => setWhDialog(true)}>Almacenes</Button>
           <Button startIcon={<CategoryIcon />} variant="outlined" onClick={() => setCatDialog(true)}>Categorías</Button>
           {canManageCatalog && (
@@ -122,7 +122,12 @@ export default function InventoryPage() {
                     </TableCell>
                     <TableCell>{p.barcode ?? '—'}</TableCell>
                     <TableCell>{catName(p.categoryId)}</TableCell>
-                    <TableCell align="right">{p.costPrice.toFixed(2)}</TableCell>
+                    <TableCell align="right">
+                      {p.costPrice.toFixed(2)}
+                      {p.costPriceUSD != null && (
+                        <Typography variant="caption" color="text.secondary" display="block">${p.costPriceUSD.toFixed(2)}</Typography>
+                      )}
+                    </TableCell>
                     <TableCell align="right">
                       {p.sellPrice.toFixed(2)}
                       {p.sellPriceUSD != null && (
@@ -257,7 +262,7 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{product ? 'Editar producto' : 'Nuevo producto'}</DialogTitle>
       <DialogContent>
-        <Box display="flex" alignItems="center" gap={2} mb={2}>
+        <Box display="flex" alignItems="center" gap={2} mb={2} flexWrap="wrap">
           {product && (
             <>
               <Avatar src={product.imageUrl} variant="rounded" sx={{ width: 56, height: 56 }}>
@@ -290,15 +295,15 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
               {categories?.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
             </TextField>
           </Grid>
-          <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Stock mínimo" value={form.minStock ?? 0} onChange={(e) => set('minStock', Number(e.target.value))} /></Grid>
+          <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Stock mínimo" value={form.minStock || ''} onChange={(e) => set('minStock', e.target.value === '' ? 0 : Number(e.target.value))} /></Grid>
 
-          <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Costo CUP" value={form.costPrice} onChange={(e) => set('costPrice', Number(e.target.value))} /></Grid>
-          <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Venta CUP" value={form.sellPrice} onChange={(e) => set('sellPrice', Number(e.target.value))} /></Grid>
+          <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Costo CUP" value={form.costPrice || ''} onChange={(e) => set('costPrice', e.target.value === '' ? 0 : Number(e.target.value))} /></Grid>
+          <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Venta CUP" value={form.sellPrice || ''} onChange={(e) => set('sellPrice', e.target.value === '' ? 0 : Number(e.target.value))} /></Grid>
           <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Costo USD" value={form.costPriceUSD ?? ''} onChange={(e) => set('costPriceUSD', num(e.target.value))} /></Grid>
           <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Venta USD" value={form.sellPriceUSD ?? ''} onChange={(e) => set('sellPriceUSD', num(e.target.value))} /></Grid>
 
           <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Impuesto %" value={form.taxRate ?? ''} onChange={(e) => set('taxRate', num(e.target.value))} /></Grid>
-          <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Venta mínima (mayorista)" value={form.minOrderQuantity ?? 1} onChange={(e) => set('minOrderQuantity', Number(e.target.value))} /></Grid>
+          <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Venta mínima (mayorista)" value={form.minOrderQuantity || ''} onChange={(e) => set('minOrderQuantity', e.target.value === '' ? 1 : Number(e.target.value))} /></Grid>
 
           {!product && (
             <>
@@ -307,7 +312,7 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
                   {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
                 </TextField>
               </Grid>
-              <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Stock inicial" value={form.initialStock ?? 0} onChange={(e) => set('initialStock', Number(e.target.value))} /></Grid>
+              <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Stock inicial" value={form.initialStock || ''} onChange={(e) => set('initialStock', e.target.value === '' ? 0 : Number(e.target.value))} /></Grid>
             </>
           )}
           <Grid item xs={12}><FormControlLabel control={<Switch checked={form.forSale ?? true} onChange={(e) => set('forSale', e.target.checked)} />} label="Disponible para la venta" /></Grid>
@@ -326,7 +331,8 @@ function AdjustStockDialog({ product, defaultWarehouse, onClose }: { product: Op
   const { data: warehouses } = useWarehouses();
   const adjust = useAdjustStock();
   const [warehouseId, setWarehouseId] = useState(defaultWarehouse || warehouses?.[0]?.id || '');
-  const [delta, setDelta] = useState(0);
+  const [delta, setDelta] = useState<number | ''>('');
+  const deltaValue = delta === '' ? 0 : delta;
 
   return (
     <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
@@ -337,15 +343,15 @@ function AdjustStockDialog({ product, defaultWarehouse, onClose }: { product: Op
             {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
           </TextField>
           <TextField size="small" type="number" label="Cantidad (+ entra, − sale)" value={delta}
-            onChange={(e) => setDelta(Number(e.target.value))}
+            onChange={(e) => setDelta(e.target.value === '' ? '' : Number(e.target.value))}
             InputProps={{ startAdornment: <InputAdornment position="start">Δ</InputAdornment> }} />
         </Stack>
         {adjust.isError && <Alert severity="error" sx={{ mt: 2 }}>Stock insuficiente o error.</Alert>}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancelar</Button>
-        <Button variant="contained" disabled={!warehouseId || delta === 0 || adjust.isPending}
-          onClick={() => adjust.mutate({ id: product.id, warehouseId, delta }, { onSuccess: onClose })}>Aplicar</Button>
+        <Button variant="contained" disabled={!warehouseId || deltaValue === 0 || adjust.isPending}
+          onClick={() => adjust.mutate({ id: product.id, warehouseId, delta: deltaValue }, { onSuccess: onClose })}>Aplicar</Button>
       </DialogActions>
     </Dialog>
   );
@@ -382,16 +388,20 @@ function WarehousesDialog({ onClose }: { onClose: () => void }) {
   const canManageCatalog = useHasOpsRole('Almacenero', 'JefeDeTurno');
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
+  const isDuplicate = (warehouses ?? []).some((w) => w.name.trim().toLowerCase() === name.trim().toLowerCase());
+  const errorMessage = (save.error as { response?: { data?: { message?: string } } })?.response?.data?.message;
   return (
     <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>Almacenes</DialogTitle>
       <DialogContent>
         {canManageCatalog && (
           <Stack spacing={1} sx={{ mt: 1, mb: 2 }}>
-            <TextField size="small" fullWidth label="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
+            <TextField size="small" fullWidth label="Nombre" value={name} onChange={(e) => setName(e.target.value)}
+              error={isDuplicate} helperText={isDuplicate ? 'Ya existe un almacén con ese nombre.' : ' '} />
             <TextField size="small" fullWidth label="Ubicación (opcional)" value={location} onChange={(e) => setLocation(e.target.value)} />
-            <Button variant="contained" disabled={!name || save.isPending}
-              onClick={() => save.mutate({ name, location: location || undefined }, { onSuccess: () => { setName(''); setLocation(''); } })}>Añadir</Button>
+            <Button variant="contained" disabled={!name.trim() || isDuplicate || save.isPending}
+              onClick={() => save.mutate({ name: name.trim(), location: location || undefined }, { onSuccess: () => { setName(''); setLocation(''); } })}>Añadir</Button>
+            {save.isError && !isDuplicate && <Alert severity="error">{errorMessage || 'No se pudo guardar el almacén.'}</Alert>}
           </Stack>
         )}
         <Stack spacing={0.5}>

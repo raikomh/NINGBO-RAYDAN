@@ -121,7 +121,7 @@ export default function StoreMapTab({ store }: StoreMapTabProps) {
         </Alert>
       )}
 
-      <Box sx={{ height: 450, borderRadius: 2, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
+      <Box sx={{ height: { xs: 250, sm: 350, md: 450 }, width: '100%', borderRadius: 2, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
         <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

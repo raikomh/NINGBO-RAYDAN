@@ -179,7 +179,7 @@ En `appsettings.json` y `appsettings.Development.json`:
   "Email": {
     "SmtpHost": "smtp.gmail.com",
     "SmtpUser": "CHANGE_ME@gmail.com",
-    "SmtpPassword": "CHANGE_ME"
+    "SmtpPassword": "CHANGE_ME_APP_PASSWORD"
   },
   "Cloudinary": {
     "CloudName": "CHANGE_ME",
@@ -187,8 +187,8 @@ En `appsettings.json` y `appsettings.Development.json`:
     "ApiSecret": "CHANGE_ME"
   },
   "Stripe": {
-    "SecretKey": "CHANGE_ME",
-    "WebhookSecret": "CHANGE_ME",
+    "SecretKey": "sk_test_CHANGE_ME",
+    "WebhookSecret": "whsec_test_CHANGE_ME",
     "Prices": {
       "Starter": "price_CHANGE_ME",
       "Premium": "price_CHANGE_ME",

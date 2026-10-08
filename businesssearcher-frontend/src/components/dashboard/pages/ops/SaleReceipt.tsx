@@ -6,11 +6,11 @@ const METHOD_LABEL: Record<string, string> = { Cash: 'Efectivo', Card: 'Tarjeta'
 
 /** Contenido imprimible de un ticket de venta. Invisible en pantalla; solo se muestra al imprimir
  * (ver regla .receipt-print-area en index.css), para no interferir con el diálogo de detalle. */
-export default function SaleReceipt({ sale }: { sale: OpsSale }) {
+export default function SaleReceipt({ sale, className }: { sale: OpsSale; className?: string }) {
   const { data: business } = useBusinessInfo();
 
   return (
-    <Box className="receipt-print-area" sx={{ p: 2, fontFamily: 'monospace', maxWidth: 320, mx: 'auto' }}>
+    <Box className={className} sx={{ p: 2, fontFamily: 'monospace', maxWidth: 320, mx: 'auto' }}>
       <Typography align="center" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
         {business?.name ?? 'Recibo de venta'}
       </Typography>
@@ -20,7 +20,7 @@ export default function SaleReceipt({ sale }: { sale: OpsSale }) {
 
       <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
       <Typography variant="caption" display="block">{new Date(sale.date).toLocaleString('es-ES')}</Typography>
-      {sale.terminalName && <Typography variant="caption" display="block">Terminal: {sale.terminalName}</Typography>}
+      {sale.warehouseName && <Typography variant="caption" display="block">Almacén: {sale.warehouseName}</Typography>}
       <Typography variant="caption" display="block">Venta #{sale.id.slice(0, 8)}</Typography>
       <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
 
@@ -43,6 +43,12 @@ export default function SaleReceipt({ sale }: { sale: OpsSale }) {
         <Typography variant="body1" fontWeight={700}>TOTAL</Typography>
         <Typography variant="body1" fontWeight={700}>{sale.total.toFixed(2)} {sale.paymentCurrency}</Typography>
       </Box>
+      {sale.totalUSD != null && sale.paymentCurrency !== 'USD' && (
+        <Box display="flex" justifyContent="space-between">
+          <Typography variant="caption" color="text.secondary">Total USD</Typography>
+          <Typography variant="caption" color="text.secondary">${sale.totalUSD.toFixed(2)}</Typography>
+        </Box>
+      )}
 
       <Divider sx={{ my: 1, borderStyle: 'dashed' }} />
       {sale.payments.map((p, i) => (

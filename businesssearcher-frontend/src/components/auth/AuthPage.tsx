@@ -1,5 +1,5 @@
-﻿import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+﻿import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,13 +11,16 @@ import {
   Visibility, VisibilityOff, StorefrontOutlined, AnalyticsOutlined, ShoppingCartOutlined,
   CheckCircleOutline, MarkEmailReadOutlined, Storefront, LocalShipping,
 } from '@mui/icons-material';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, AUTH_NOTICE_KEY } from '@/context/AuthContext';
 import { api } from '@/lib/apiClient';
+import { isLocalDeployment } from '@/lib/deployment';
 
 export type AuthMode = 'login' | 'register';
 
+// Formato mínimo (algo@dominio.tld) sin restringir a ASCII: hay cuentas con ñ/acentos en el usuario
+// del correo (p. ej. cutiño@...) que z.string().email() y el type="email" nativo rechazarían.
 const loginSchema = z.object({
-  email: z.string().email('Email inválido'),
+  email: z.string().trim().refine((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Email inválido'),
   password: z.string().min(1, 'La contraseña es requerida'),
 });
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -80,6 +83,16 @@ function LoginPanel({ active, onSwitch }: { active: boolean; onSwitch: () => voi
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [employeeMode, setEmployeeMode] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  // Aviso de un logout forzado por suscripción vencida (ver AuthContext.forceLogoutForExpiredSubscription).
+  useEffect(() => {
+    const stored = localStorage.getItem(AUTH_NOTICE_KEY);
+    if (stored) {
+      setNotice(stored);
+      localStorage.removeItem(AUTH_NOTICE_KEY);
+    }
+  }, []);
 
   const { register, handleSubmit, getValues, formState: { errors, isSubmitting } } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -90,11 +103,16 @@ function LoginPanel({ active, onSwitch }: { active: boolean; onSwitch: () => voi
     setNeedsVerification(false);
     setResendState('idle');
     try {
+      // El password no se recorta en el schema (a diferencia del email) para no alterar lo que
+      // el usuario ve mientras escribe; se recorta solo aquí, al enviar, porque un espacio final
+      // invisible (típico de autocompletado/copy-paste) rompe la verificación de hash en silencio
+      // y el usuario ve "Credenciales inválidas" sin entender por qué.
+      const password = data.password.trim();
       if (employeeMode) {
-        await loginOps(data.email, data.password);
+        await loginOps(data.email, password);
         navigate('/dashboard/ops/pos');
       } else {
-        await login(data.email, data.password);
+        await login(data.email, password);
         navigate('/dashboard');
       }
     } catch (err: unknown) {
@@ -181,6 +199,7 @@ function LoginPanel({ active, onSwitch }: { active: boolean; onSwitch: () => voi
             </button>
           </div>
 
+          {notice && <Alert severity="info" className="mb-4" onClose={() => setNotice('')}>{notice}</Alert>}
           {error && <Alert severity="error" className="mb-4">{error}</Alert>}
 
           {needsVerification && resendState !== 'sent' && (
@@ -202,7 +221,7 @@ function LoginPanel({ active, onSwitch }: { active: boolean; onSwitch: () => voi
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
             <TextField
               label="Correo electrónico"
               type="email"
@@ -271,13 +290,14 @@ function LoginPanel({ active, onSwitch }: { active: boolean; onSwitch: () => voi
 
 function RegisterPanel({ active, onSwitch }: { active: boolean; onSwitch: () => void }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [registered, setRegistered] = useState(false);
 
   const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { tenantType: 'Retail' },
+    defaultValues: { tenantType: 'Retail', referralCode: searchParams.get('ref') ?? '' },
   });
 
   const onSubmit = async (data: RegisterFormData) => {
@@ -304,10 +324,24 @@ function RegisterPanel({ active, onSwitch }: { active: boolean; onSwitch: () => 
       <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="100vh" gap={3} px={2} textAlign="center" className="bg-white dark:bg-gray-950">
         <MarkEmailReadOutlined sx={{ fontSize: 64, color: 'success.main' }} />
         <Typography variant="h5" fontWeight={700}>¡Cuenta creada!</Typography>
-        <Typography variant="body1" color="text.secondary" maxWidth={420}>
-          Revisa tu correo para verificar tu email. Después, un administrador debe aprobar
-          tu cuenta antes de que puedas iniciar sesión — te avisaremos cuando esté lista.
-        </Typography>
+        {isLocalDeployment ? (
+          <>
+            <Typography variant="body1" color="text.secondary" maxWidth={440}>
+              Tu instalación ya está activa — puedes iniciar sesión ahora mismo y empezar a trabajar,
+              sin esperar nada.
+            </Typography>
+            <Alert severity="info" sx={{ maxWidth: 440, textAlign: 'left' }}>
+              De paso estamos conectando esta instalación con tu cuenta en línea, en segundo plano.
+              Mientras se aprueba allá, sigues trabajando normal — cuando quede lista, se sincroniza
+              sola. Puedes ver el estado en Sincronización.
+            </Alert>
+          </>
+        ) : (
+          <Typography variant="body1" color="text.secondary" maxWidth={420}>
+            Revisa tu correo para verificar tu email. Después, un administrador debe aprobar
+            tu cuenta antes de que puedas iniciar sesión — te avisaremos cuando esté lista.
+          </Typography>
+        )}
         <Button variant="contained" size="large" onClick={() => navigate('/login')}>
           Ir al inicio de sesión
         </Button>

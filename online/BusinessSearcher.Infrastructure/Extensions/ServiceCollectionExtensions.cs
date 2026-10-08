@@ -133,10 +133,10 @@ namespace BusinessSearcher.Infrastructure.Extensions
             services.AddScoped<Domain.BoundedContext.Operations.Repositories.ICatalogImportRepository,      Persistence.Repositories.Operations.CatalogImportRepository>();
             services.AddScoped<Domain.BoundedContext.Operations.Repositories.IProductPriceHistoryRepository, Persistence.Repositories.Operations.ProductPriceHistoryRepository>();
             services.AddScoped<Domain.BoundedContext.Operations.Repositories.ISaleRepository,          Persistence.Repositories.Operations.SaleRepository>();
-            services.AddScoped<Domain.BoundedContext.Operations.Repositories.ITerminalRepository,      Persistence.Repositories.Operations.TerminalRepository>();
             services.AddScoped<Domain.BoundedContext.Operations.Repositories.ICashRegisterRepository,  Persistence.Repositories.Operations.CashRegisterRepository>();
             services.AddScoped<Domain.BoundedContext.Operations.Repositories.ICashMovementRepository,  Persistence.Repositories.Operations.CashMovementRepository>();
             services.AddScoped<Domain.BoundedContext.Operations.Repositories.IOperationsUserRepository, Persistence.Repositories.Operations.OperationsUserRepository>();
+            services.AddScoped<Domain.BoundedContext.Operations.Repositories.IManagerRepository, Persistence.Repositories.Operations.ManagerRepository>();
             services.AddScoped<Domain.BoundedContext.Operations.Repositories.IPurchaseRequestRepository,   Persistence.Repositories.Operations.PurchaseRequestRepository>();
             services.AddScoped<Domain.BoundedContext.Operations.Repositories.IPurchaseRepository,          Persistence.Repositories.Operations.PurchaseRepository>();
             services.AddScoped<Domain.BoundedContext.Operations.Repositories.IInventoryMovementRepository, Persistence.Repositories.Operations.InventoryMovementRepository>();

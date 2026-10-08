@@ -307,10 +307,6 @@ namespace BusinessSearcher.Infrastructure.Persistence.Migrations.Operations
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
 
-                    b.Property<Guid?>("TerminalId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("terminal_id");
-
                     b.Property<decimal>("TotalCashIn")
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("total_cash_in");
@@ -711,6 +707,74 @@ namespace BusinessSearcher.Infrastructure.Persistence.Migrations.Operations
                         .HasDatabaseName("ix_op_inventory_movements_tenant_id_date");
 
                     b.ToTable("op_inventory_movements", "public");
+                });
+
+            modelBuilder.Entity("BusinessSearcher.Domain.BoundedContext.Operations.Aggregates.Manager", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("IdNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("id_number");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Municipality")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("municipality");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("phone");
+
+                    b.Property<string>("Province")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("province");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_op_managers");
+
+                    b.HasIndex("TenantId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_op_managers_tenant_id_code");
+
+                    b.ToTable("op_managers", "public");
                 });
 
             modelBuilder.Entity("BusinessSearcher.Domain.BoundedContext.Operations.Aggregates.OperationsUser", b =>
@@ -1324,6 +1388,11 @@ namespace BusinessSearcher.Infrastructure.Persistence.Migrations.Operations
                         .HasColumnType("decimal(18,4)")
                         .HasColumnName("exchange_rate");
 
+                    b.Property<string>("ManagerCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("manager_code");
+
                     b.Property<string>("PaymentCurrency")
                         .IsRequired()
                         .HasMaxLength(3)
@@ -1362,11 +1431,6 @@ namespace BusinessSearcher.Infrastructure.Persistence.Migrations.Operations
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
 
-                    b.Property<string>("TerminalName")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
-                        .HasColumnName("terminal_name");
-
                     b.Property<decimal>("Total")
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("total");
@@ -1378,6 +1442,11 @@ namespace BusinessSearcher.Infrastructure.Persistence.Migrations.Operations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<string>("WarehouseName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("warehouse_name");
 
                     b.HasKey("Id")
                         .HasName("pk_op_sales");
@@ -1630,52 +1699,6 @@ namespace BusinessSearcher.Infrastructure.Persistence.Migrations.Operations
                         .HasDatabaseName("ix_op_suppliers_tenant_id");
 
                     b.ToTable("op_suppliers", "public");
-                });
-
-            modelBuilder.Entity("BusinessSearcher.Domain.BoundedContext.Operations.Aggregates.Terminal", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("description");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
-                        .HasColumnName("name");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenant_id");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("WarehouseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("warehouse_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_op_terminals");
-
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("ix_op_terminals_tenant_id");
-
-                    b.ToTable("op_terminals", "public");
                 });
 
             modelBuilder.Entity("BusinessSearcher.Domain.BoundedContext.Operations.Aggregates.Warehouse", b =>

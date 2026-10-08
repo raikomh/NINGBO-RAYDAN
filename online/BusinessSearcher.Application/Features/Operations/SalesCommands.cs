@@ -23,8 +23,8 @@ namespace BusinessSearcher.Application.Features.Operations
         public static SaleDto ToDto(Sale s) => new(
             s.Id, s.Date, s.Subtotal, s.Discount, s.Total, s.SubtotalUSD, s.TotalUSD, s.TaxAmount,
             s.PaymentMethod.ToString(), s.PaymentCurrency.ToString(), s.ExchangeRate, s.Status.ToString(),
-            s.CashierId, s.RegisterId, s.TerminalName,
-            s.Items.Select(ToDto).ToList(), s.Payments.Select(ToDto).ToList());
+            s.CashierId, s.RegisterId, s.WarehouseName,
+            s.Items.Select(ToDto).ToList(), s.Payments.Select(ToDto).ToList(), null, s.ManagerCode);
 
         /// <summary>El cajero de una venta es un OperationsUser, o el dueño del negocio (Tenant) si vendió
         /// él mismo desde su propia sesión: no tiene fila en OperationsUser, así que no está en <paramref name="workerNames"/>.</summary>
@@ -69,9 +69,11 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
         private readonly ISaleRepository _sales; private readonly IProductRepository _products;
         private readonly ICashRegisterRepository _registers; private readonly ICashMovementRepository _movements;
         private readonly IOperationsUnitOfWork _uow; private readonly ICurrentUserService _u;
+        private readonly IManagerRepository _managers; private readonly IWarehouseRepository _warehouses;
         public CreateSaleHandler(ISaleRepository sales, IProductRepository products, ICashRegisterRepository registers,
-            ICashMovementRepository movements, IOperationsUnitOfWork uow, ICurrentUserService u)
-        { _sales = sales; _products = products; _registers = registers; _movements = movements; _uow = uow; _u = u; }
+            ICashMovementRepository movements, IOperationsUnitOfWork uow, ICurrentUserService u, IManagerRepository managers,
+            IWarehouseRepository warehouses)
+        { _sales = sales; _products = products; _registers = registers; _movements = movements; _uow = uow; _u = u; _managers = managers; _warehouses = warehouses; }
 
         public async Task<SaleDto> Handle(CreateSaleCommand r, CancellationToken ct)
         {
@@ -80,6 +82,15 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
 
             var currency = SalesMapper.ParseEnum(d.PaymentCurrency, Currency.CUP);
             var method   = SalesMapper.ParseEnum(d.PaymentMethod, PaymentMethod.Cash);
+
+            string? managerCode = null;
+            if (!string.IsNullOrWhiteSpace(d.ManagerCode))
+            {
+                var manager = await _managers.GetByCodeAsync(t, d.ManagerCode, ct)
+                              ?? throw new DomainException($"No existe un gestor con el código {d.ManagerCode.Trim()}.");
+                if (!manager.IsActive) throw new DomainException($"El gestor {manager.Code} está inactivo.");
+                managerCode = manager.Code;
+            }
 
             var saleItems = new List<SaleItem>();
             var productsTouched = new List<Product>();
@@ -105,8 +116,9 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
                 p.CashTendered, p.Change, p.ChangeCurrency is null ? null : SalesMapper.ParseEnum<Currency>(p.ChangeCurrency, Currency.CUP)))
                 .ToList();
 
+            var warehouseName = (await _warehouses.GetByIdAsync(t, saleItems[0].WarehouseId, ct))?.Name;
             var sale = Sale.Create(t, _u.AccountId, d.RegisterId, method, currency, saleItems, payments,
-                d.ExchangeRate, d.TaxAmount, d.TerminalName);
+                d.ExchangeRate, d.TaxAmount, warehouseName, managerCode);
 
             foreach (var p in productsTouched) await _products.UpdateAsync(p, ct);
             await _sales.AddAsync(sale, ct);
@@ -295,6 +307,7 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
                 warehouseId = warehouses.FirstOrDefault()?.Id
                     ?? throw new DomainException("No hay almacenes configurados para recibir las ventas importadas.");
             }
+            var warehouseName = (await _warehouses.GetByIdAsync(t, warehouseId.Value, ct))?.Name;
 
             // Resuelve cada fila contra el catálogo: código exacto primero, si no nombre exacto.
             var resolved = new List<(SalesImportRowDto Row, Product Product)>();
@@ -355,7 +368,7 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
                 var item = SaleItem.Create(product.Id, product.Name, warehouseId.Value, row.Quantity, unitPrice);
                 var payment = SalePayment.Create(PaymentMethod.Cash, item.LineTotal, Currency.CUP, cashTendered: item.LineTotal, change: 0);
                 var sale = Sale.Create(t, _u.AccountId, register.Id, PaymentMethod.Cash, Currency.CUP,
-                    new[] { item }, new[] { payment }, terminalName: "Importación");
+                    new[] { item }, new[] { payment }, warehouseName: warehouseName);
                 await _sales.AddAsync(sale, ct);
 
                 register.RegisterSale(payment.Amount);

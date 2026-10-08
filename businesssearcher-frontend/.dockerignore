@@ -1,0 +1,10 @@
+node_modules
+dist
+.astro
+.wrangler
+.git
+.github
+.vscode
+.env
+.dev-server.log
+.dev-server-err.log

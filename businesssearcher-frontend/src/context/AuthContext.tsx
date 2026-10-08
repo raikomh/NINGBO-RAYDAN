@@ -1,5 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { api } from '@/lib/apiClient';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { api, setSubscriptionExpiredHandler } from '@/lib/apiClient';
 import type { User } from '@/lib/types';
 
 interface AuthContextValue {
@@ -16,6 +16,12 @@ interface AuthContextValue {
 // Clave donde persistimos la sesión de sub-usuario (TPV). El endpoint /auth/profile
 // solo entiende de dueños de negocio, así que para empleados hidratamos desde aquí.
 const OPS_SESSION_KEY = 'opsSession';
+
+// Mensaje que AuthPage muestra tras un logout forzado por suscripción vencida
+// (lo lee y lo borra al montar).
+export const AUTH_NOTICE_KEY = 'authNotice';
+const SUBSCRIPTION_EXPIRED_NOTICE =
+  'Tu suscripción venció. Inicia sesión de nuevo para ver el estado de tu cuenta y regularizar el pago.';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -34,10 +40,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
   const [isLoading, setIsLoading] = useState(true);
 
+  // login()/loginWithToken() ya hacen su propio fetch de perfil y setUser (a propósito SIN el
+  // chequeo de suscripción vencida, ver comentario en forceLogoutForExpiredSubscription). Como
+  // ambos también llaman a setToken(), disparan el useEffect de abajo, que haría un SEGUNDO fetch
+  // de perfil en paralelo — y ese sí aplica el chequeo y puede forzar logout. Sin esta bandera,
+  // los dos fetches compiten: si el del efecto responde después, deshace el login recién hecho y
+  // una cuenta bloqueada por pago nunca llega a ver SubscriptionBlockedPage.
+  const justAuthenticatedRef = useRef(false);
+
+  // Cierra la sesión por suscripción vencida: NO se usa dentro de login() a propósito — si
+  // lo hiciera, un dueño bloqueado nunca podría volver a entrar para llegar a Sincronización o
+  // al chat de soporte (las únicas vías para regularizar el pago), quedando en deadlock. Solo
+  // se aplica a una sesión que YA estaba abierta (al recargar o al recibir un 402 en cualquier
+  // llamada): esa sesión se cierra y el dueño tiene que loguearse de nuevo para continuar, punto
+  // en el que login() lo deja entrar igual aunque siga bloqueado, para ver el aviso y el banner.
+  const forceLogoutForExpiredSubscription = useCallback(() => {
+    localStorage.setItem(AUTH_NOTICE_KEY, SUBSCRIPTION_EXPIRED_NOTICE);
+    localStorage.removeItem('token');
+    localStorage.removeItem(OPS_SESSION_KEY);
+    setToken(null);
+    setUser(null);
+  }, []);
+
   const fetchProfile = useCallback(async () => {
     try {
       const res = await api.get('/api/v1/auth/profile');
-      setUser(withRole(res.data.data));
+      const profile = withRole(res.data.data);
+      if (profile && profile.role !== 'admin' && profile.isSubscriptionActive === false) {
+        forceLogoutForExpiredSubscription();
+        return;
+      }
+      setUser(profile);
     } catch {
       localStorage.removeItem('token');
       setToken(null);
@@ -45,10 +78,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [forceLogoutForExpiredSubscription]);
+
+  // Un 402 SUBSCRIPTION_EXPIRED en una sesión ya abierta cierra la sesión de inmediato la PRIMERA
+  // vez que se detecta (sorpresa: el dueño no sabía que estaba bloqueado). Pero si ya lo sabemos
+  // (login() lo dejó entrar con isSubscriptionActive === false para ver el banner y llegar a
+  // Sincronización), un 402 de cualquier llamada de fondo que igual sigue disparándose ahí (p.ej.
+  // la campanita de notificaciones, que no está exenta del bloqueo) NO debe volver a expulsarlo:
+  // si lo hiciera, nunca llegaría a Sincronización — quedaría en un bucle login→402→login.
+  useEffect(() => {
+    setSubscriptionExpiredHandler(() => {
+      if (user?.isSubscriptionActive === false) return;
+      forceLogoutForExpiredSubscription();
+    });
+    return () => setSubscriptionExpiredHandler(null);
+  }, [forceLogoutForExpiredSubscription, user]);
 
   useEffect(() => {
     if (token) {
+      if (justAuthenticatedRef.current) {
+        // login()/loginWithToken() ya resolvieron el perfil y el estado: no repetir el fetch.
+        justAuthenticatedRef.current = false;
+        setIsLoading(false);
+        return;
+      }
       // Empleado (TPV): hidratar desde la sesión guardada, sin llamar a /auth/profile.
       const opsRaw = localStorage.getItem(OPS_SESSION_KEY);
       if (opsRaw) {
@@ -74,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     const { token: newToken } = res.data.data;
     localStorage.setItem('token', newToken);
+    justAuthenticatedRef.current = true;
     setToken(newToken);
     const profileRes = await api.get('/api/v1/auth/profile');
     setUser(withRole(profileRes.data.data));
@@ -83,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // (el login normal exige email verificado, el token de registro no).
   const loginWithToken = async (newToken: string) => {
     localStorage.setItem('token', newToken);
+    justAuthenticatedRef.current = true;
     setToken(newToken);
     const profileRes = await api.get('/api/v1/auth/profile');
     setUser(withRole(profileRes.data.data));

@@ -3,9 +3,13 @@ import { mockAdapter } from './mockApi';
 
 // En producción, si no se define VITE_API_URL en el build, se apunta al backend
 // desplegado; en dev se deja vacío para que las llamadas /api pasen por el proxy de Vite.
-const BASE_URL =
+// VITE_API_URL='/' significa "mismo origen" (build Docker: nginx sirve el front y
+// hace de proxy del API). Al quitar la barra final queda '' y axios usa rutas
+// relativas, así que no hay cross-origin ni CORS que configurar.
+const BASE_URL = (
   import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? 'https://businesssearcher-api.onrender.com' : '');
+  (import.meta.env.PROD ? 'https://businesssearcher-api.onrender.com' : '')
+).replace(/\/+$/, '');
 const MOCK = import.meta.env.VITE_MOCK === 'true';
 
 export const api = axios.create({
@@ -34,6 +38,14 @@ api.interceptors.request.use((config) => {
 // no deben disparar el refresh ni la redirección a /login (perderían el mensaje de error).
 const AUTH_ENTRY_PATHS = ['/api/v1/auth/login', '/api/v1/ops/auth/login', '/api/v1/client/auth/login'];
 
+// Registrado por AuthContext: cuando el backend responde 402 SUBSCRIPTION_EXPIRED (suscripción
+// vencida, ver SubscriptionEnforcementMiddleware en el backend), refleja el bloqueo en el usuario
+// en memoria de inmediato, sin esperar al próximo fetch de /auth/profile.
+let onSubscriptionExpired: (() => void) | null = null;
+export function setSubscriptionExpiredHandler(fn: (() => void) | null) {
+  onSubscriptionExpired = fn;
+}
+
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value: unknown) => void;
@@ -52,6 +64,11 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const originalRequest = error.config;
+
+    if (error.response?.status === 402 && error.response?.data?.code === 'SUBSCRIPTION_EXPIRED') {
+      onSubscriptionExpired?.();
+      return Promise.reject(error);
+    }
 
     const isAuthEntry = AUTH_ENTRY_PATHS.some((p) => originalRequest.url?.includes(p));
 

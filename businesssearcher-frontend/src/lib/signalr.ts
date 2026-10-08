@@ -1,8 +1,12 @@
 import * as signalR from '@microsoft/signalr';
 
-const BASE_URL =
+// VITE_API_URL='/' significa "mismo origen" (build Docker: nginx sirve el front y
+// hace de proxy del API). Al quitar la barra final queda '' y las URLs de los hubs
+// salen relativas (/hubs/...), que SignalR resuelve contra el origen de la página.
+const BASE_URL = (
   import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? 'https://businesssearcher-api.onrender.com' : 'http://localhost:62560');
+  (import.meta.env.PROD ? 'https://businesssearcher-api.onrender.com' : 'http://localhost:62560')
+).replace(/\/+$/, '');
 
 let connection: signalR.HubConnection | null = null;
 

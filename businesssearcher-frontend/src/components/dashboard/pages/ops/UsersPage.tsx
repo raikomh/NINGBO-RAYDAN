@@ -8,10 +8,10 @@ import { Add, Edit, Badge } from '@mui/icons-material';
 import { useOpsUsers, useSaveOpsUser, useWarehouses } from '@/hooks/useOps';
 import type { OpsUser, OpsRole, CreateOpsUser, UpdateOpsUser } from '@/lib/opsTypes';
 
-const ROLES: OpsRole[] = ['Administrador', 'Cajero', 'JefeDeTurno', 'Almacenero', 'Comercial', 'Auditor'];
+const ROLES: OpsRole[] = ['Administrador', 'Cajero', 'JefeDeTurno', 'Almacenero', 'Comercial', 'Auditor', 'Observador'];
 const ROLE_LABEL: Record<OpsRole, string> = {
   Administrador: 'Administrador', Cajero: 'Cajero', JefeDeTurno: 'Jefe de Turno',
-  Almacenero: 'Almacenero', Comercial: 'Comercial', Auditor: 'Auditor',
+  Almacenero: 'Almacenero', Comercial: 'Comercial', Auditor: 'Auditor', Observador: 'Observador',
 };
 
 export default function UsersPage() {
@@ -21,7 +21,7 @@ export default function UsersPage() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2} mb={3}>
         <Typography variant="h5" fontWeight={700}>Usuarios del negocio</Typography>
         <Button startIcon={<Add />} variant="contained" onClick={() => { setEdit(null); setDialog(true); }}>Nuevo usuario</Button>
       </Box>

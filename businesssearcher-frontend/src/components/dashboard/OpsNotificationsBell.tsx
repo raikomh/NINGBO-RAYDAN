@@ -49,7 +49,7 @@ export default function OpsNotificationsBell() {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
-        <Box sx={{ width: 340, maxHeight: 420, overflow: 'auto' }}>
+        <Box sx={{ width: { xs: 'calc(100vw - 32px)', sm: 340 }, maxWidth: 340, maxHeight: 420, overflow: 'auto' }}>
           <Box sx={{ p: 1.5 }}>
             <Typography variant="subtitle2" fontWeight={700}>Notificaciones operativas</Typography>
           </Box>

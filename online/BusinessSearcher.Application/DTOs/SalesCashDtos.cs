@@ -12,8 +12,16 @@ namespace BusinessSearcher.Application.DTOs.Operations
     public record SaleDto(
         Guid Id, DateTime Date, decimal Subtotal, decimal Discount, decimal Total,
         decimal? SubtotalUSD, decimal? TotalUSD, decimal? TaxAmount, string PaymentMethod, string PaymentCurrency,
-        decimal? ExchangeRate, string Status, Guid CashierId, Guid RegisterId, string? TerminalName,
-        IReadOnlyList<SaleItemDto> Items, IReadOnlyList<SalePaymentDto> Payments, string? CashierName = null);
+        decimal? ExchangeRate, string Status, Guid CashierId, Guid RegisterId, string? WarehouseName,
+        IReadOnlyList<SaleItemDto> Items, IReadOnlyList<SalePaymentDto> Payments, string? CashierName = null,
+        string? ManagerCode = null);
+
+    // ── Gestores ──
+    public record ManagerDto(
+        Guid Id, string Code, string Name, string IdNumber, string Municipality, string Province, string Phone, bool IsActive);
+    public record CreateManagerDto(string Code, string Name, string IdNumber, string Municipality, string Province, string Phone);
+    public record UpdateManagerDto(
+        string Code, string Name, string IdNumber, string Municipality, string Province, string Phone, bool IsActive = true);
 
     // Renglón entrante del carrito
     public record CreateSaleItemDto(
@@ -27,7 +35,8 @@ namespace BusinessSearcher.Application.DTOs.Operations
     public record CreateSaleDto(
         Guid RegisterId, string PaymentMethod, string PaymentCurrency,
         IReadOnlyList<CreateSaleItemDto> Items, IReadOnlyList<CreateSalePaymentDto> Payments,
-        decimal? ExchangeRate = null, decimal? TaxAmount = null, string? TerminalName = null);
+        decimal? ExchangeRate = null, decimal? TaxAmount = null,
+        string? ManagerCode = null);
 
     /// <summary>Edita los renglones de una venta ya registrada (reajusta stock viejo vs nuevo). No modifica pagos.</summary>
     public record UpdateSaleDto(IReadOnlyList<CreateSaleItemDto> Items);
@@ -46,23 +55,19 @@ namespace BusinessSearcher.Application.DTOs.Operations
         bool Success, bool NeedsPriceConfirmation, int ImportedCount, int PricesUpdatedCount,
         IReadOnlyList<SalesImportPriceDiffDto> PriceDifferences, IReadOnlyList<string> Errors);
 
-    // ── Terminales ──
-    public record TerminalDto(Guid Id, string Name, string? Description, Guid? WarehouseId, bool IsActive);
-    public record CreateTerminalDto(string Name, string? Description = null, Guid? WarehouseId = null, bool IsActive = true);
-
     // ── Caja / arqueo ──
     public record CashMovementDto(
         Guid Id, Guid RegisterId, DateTime Date, string Type, decimal Amount, decimal? AmountUSD,
         string Currency, string? Description, Guid? UserId);
 
     public record CashRegisterDto(
-        Guid Id, Guid? WarehouseId, Guid? TerminalId, DateTime OpenDate, DateTime? CloseDate,
+        Guid Id, Guid? WarehouseId, DateTime OpenDate, DateTime? CloseDate,
         decimal InitialAmount, decimal? ExpectedAmount, decimal? ActualAmount, decimal? Difference,
         decimal? InitialAmountUSD, decimal? ActualAmountUSD, decimal? DifferenceUSD, string Status,
         Guid OpenedBy, Guid? ClosedBy, int SalesCount, decimal TotalSales, decimal TotalExpenses,
         decimal TotalCashIn, decimal TotalCashOut, bool InventoryCountCompleted);
 
-    public record OpenCashRegisterDto(decimal InitialAmount, Guid? WarehouseId = null, Guid? TerminalId = null, decimal? InitialAmountUSD = null);
+    public record OpenCashRegisterDto(decimal InitialAmount, Guid? WarehouseId = null, decimal? InitialAmountUSD = null);
     public record CloseCashRegisterDto(decimal ActualAmount, decimal? ActualAmountUSD = null);
     public record CreateCashMovementDto(Guid RegisterId, string Type, decimal Amount, string Currency = "CUP", decimal? AmountUSD = null, string? Description = null);
 }

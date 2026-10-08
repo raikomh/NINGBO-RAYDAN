@@ -11,6 +11,12 @@ export interface User {
   isOpsUser?: boolean;
   opsRole?: string;
   name?: string;
+  // Solo viene en el perfil del dueño (TenantDto), no en sesiones de empleado del TPV.
+  isSubscriptionActive?: boolean;
+  status?: string;
+  nextPaymentDate?: string;
+  lastPaymentDate?: string;
+  phoneNumber?: string;
 }
 
 export interface Address {
@@ -249,6 +255,47 @@ export interface TenantAdmin {
   isApproved: boolean;
   isSubscriptionActive: boolean;
   createdAt: string;
+  phoneNumber?: string;
+  lastPaymentDate?: string;
+  nextPaymentDate?: string;
+}
+
+export interface PaymentClaim {
+  id: string;
+  amount: number;
+  currency: string;
+  proofReference: string;
+  phoneNumber: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+}
+
+export interface AdminPaymentClaim {
+  claimId: string;
+  tenantId: string;
+  businessName: string;
+  email: string;
+  phoneNumber: string;
+  amount: number;
+  currency: string;
+  proofReference: string;
+  claimStatus: 'Pending' | 'Approved' | 'Rejected';
+  requestedAt: string;
+  reviewedAt?: string;
+  tenantStatus: string;
+  isSubscriptionActive: boolean;
+  lastPaymentDate?: string;
+  nextPaymentDate?: string;
+}
+
+export interface ExpiringTenant {
+  tenantId: string;
+  businessName: string;
+  email: string;
+  nextPaymentDate: string;
+  daysUntilExpiry: number;
 }
 
 export interface ClientAdmin {
@@ -262,6 +309,32 @@ export interface ClientAdmin {
   reportsSubmitted: number;
   createdAt: string;
   premiumRequested: boolean;
+  phoneNumber?: string;
+  premiumUntil?: string;
+}
+
+export interface AdminPremiumClaim {
+  claimId: string;
+  clientId: string;
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  amount: number;
+  currency: string;
+  proofReference: string;
+  claimStatus: 'Pending' | 'Approved' | 'Rejected';
+  requestedAt: string;
+  reviewedAt?: string;
+  plan: string;
+  premiumUntil?: string;
+}
+
+export interface ExpiringClient {
+  clientId: string;
+  fullName: string;
+  email: string;
+  premiumUntil: string;
+  daysUntilExpiry: number;
 }
 
 export interface AdminStats {
@@ -337,4 +410,15 @@ export interface OverdueTenant {
   status: string;
   lastPaymentDate: string;
   daysOverdue: number;
+}
+
+export interface ReferralPayoutAdmin {
+  clientId: string;
+  fullName: string;
+  email: string;
+  validReferralsTotal: number;
+  referralBonusTotal: number;
+  competitionPrizeTotal: number;
+  cupBalance: number;
+  cupPaidTotal: number;
 }

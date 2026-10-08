@@ -1,6 +1,6 @@
 import { useAuth } from '@/context/AuthContext';
 
-export type OpsRoleName = 'Administrador' | 'Cajero' | 'JefeDeTurno' | 'Almacenero' | 'Comercial' | 'Auditor';
+export type OpsRoleName = 'Administrador' | 'Cajero' | 'JefeDeTurno' | 'Almacenero' | 'Comercial' | 'Auditor' | 'Observador';
 
 /** Rol operativo del usuario actual. El dueño del negocio (no es sub-usuario) es Administrador implícito. */
 export function useOpsRole(): OpsRoleName {

@@ -4,41 +4,6 @@ using BusinessSearcher.Domain.Exceptions;
 
 namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
 {
-    /// <summary>Terminal / punto de cobro asociado a un almacén (TPV: Terminal).</summary>
-    public class Terminal : Entity, IAggregateRoot
-    {
-        public Guid                  TenantId    { get; private set; }
-        public string                Name        { get; private set; } = default!;
-        public string?               Description { get; private set; }
-        public Guid?                 WarehouseId { get; private set; }
-        public bool                  IsActive    { get; private set; } = true;
-
-        private Terminal() { }
-        private Terminal(Guid id) : base(id) { }
-
-        public static Terminal Create(Guid tenantId, string name, string? description = null, Guid? warehouseId = null)
-        {
-            if (tenantId == Guid.Empty) throw new DomainException("La terminal debe pertenecer a un negocio.");
-            if (string.IsNullOrWhiteSpace(name)) throw new DomainException("El nombre de la terminal es requerido.");
-            return new Terminal { TenantId = tenantId, Name = name.Trim(), Description = description?.Trim(), WarehouseId = warehouseId };
-        }
-
-        public static Terminal Restore(Guid id, DateTime createdAt, DateTime? updatedAt, Guid tenantId,
-            string name, string? description, Guid? warehouseId, bool isActive)
-        {
-            var terminal = new Terminal(id) { TenantId = tenantId, Name = name, Description = description, WarehouseId = warehouseId, IsActive = isActive };
-            terminal.CreatedAt = createdAt;
-            terminal.UpdatedAt = updatedAt;
-            return terminal;
-        }
-
-        public void Update(string name, string? description, Guid? warehouseId, bool isActive)
-        {
-            if (string.IsNullOrWhiteSpace(name)) throw new DomainException("El nombre de la terminal es requerido.");
-            Name = name.Trim(); Description = description?.Trim(); WarehouseId = warehouseId; IsActive = isActive; SetUpdated();
-        }
-    }
-
     /// <summary>Movimiento de efectivo dentro de una caja abierta (TPV: CashMovement).</summary>
     public class CashMovement : Entity
     {
@@ -89,7 +54,6 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
     {
         public Guid               TenantId        { get; private set; }
         public Guid?              WarehouseId     { get; private set; }
-        public Guid?              TerminalId      { get; private set; }
         public DateTime           OpenDate        { get; private set; }
         public DateTime?          CloseDate       { get; private set; }
         public decimal            InitialAmount   { get; private set; }
@@ -117,14 +81,14 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
         private CashRegister(Guid id) : base(id) { }
 
         public static CashRegister Open(Guid tenantId, Guid openedBy, decimal initialAmount,
-            Guid? warehouseId = null, Guid? terminalId = null, decimal? initialAmountUsd = null)
+            Guid? warehouseId = null, decimal? initialAmountUsd = null)
         {
             if (tenantId == Guid.Empty) throw new DomainException("La caja debe pertenecer a un negocio.");
             if (initialAmount < 0) throw new DomainException("El monto inicial no puede ser negativo.");
             return new CashRegister
             {
                 TenantId = tenantId, OpenedBy = openedBy, InitialAmount = initialAmount, InitialAmountUSD = initialAmountUsd,
-                WarehouseId = warehouseId, TerminalId = terminalId, OpenDate = DateTime.UtcNow, Status = CashRegisterStatus.Open
+                WarehouseId = warehouseId, OpenDate = DateTime.UtcNow, Status = CashRegisterStatus.Open
             };
         }
 
@@ -192,7 +156,7 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
         }
 
         public static CashRegister Restore(Guid id, DateTime createdAt, DateTime? updatedAt, Guid tenantId,
-            Guid? warehouseId, Guid? terminalId, DateTime openDate, DateTime? closeDate,
+            Guid? warehouseId, DateTime openDate, DateTime? closeDate,
             decimal initialAmount, decimal? expectedAmount, decimal? actualAmount, decimal? difference,
             decimal? initialAmountUsd, decimal? expectedAmountUsd, decimal? actualAmountUsd, decimal? differenceUsd,
             CashRegisterStatus status, Guid openedBy, Guid? closedBy, int salesCount, decimal totalSales,
@@ -200,7 +164,7 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
         {
             var register = new CashRegister(id)
             {
-                TenantId = tenantId, WarehouseId = warehouseId, TerminalId = terminalId,
+                TenantId = tenantId, WarehouseId = warehouseId,
                 OpenDate = openDate, CloseDate = closeDate, InitialAmount = initialAmount,
                 ExpectedAmount = expectedAmount, ActualAmount = actualAmount, Difference = difference,
                 InitialAmountUSD = initialAmountUsd, ExpectedAmountUSD = expectedAmountUsd,

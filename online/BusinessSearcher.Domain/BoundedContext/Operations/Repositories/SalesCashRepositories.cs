@@ -11,14 +11,6 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Repositories
         Task UpdateAsync(Sale sale, CancellationToken ct = default);
     }
 
-    public interface ITerminalRepository
-    {
-        Task<Terminal?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default);
-        Task<IReadOnlyList<Terminal>> GetByTenantAsync(Guid tenantId, CancellationToken ct = default);
-        Task AddAsync(Terminal terminal, CancellationToken ct = default);
-        Task UpdateAsync(Terminal terminal, CancellationToken ct = default);
-    }
-
     public interface ICashRegisterRepository
     {
         Task<CashRegister?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default);

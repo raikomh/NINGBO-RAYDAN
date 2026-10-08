@@ -23,7 +23,7 @@ export default function MovementsPage() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={1}>
         <Typography variant="h5" fontWeight={700}>Movimientos de inventario</Typography>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} flexWrap="wrap">
           <Button startIcon={<CallSplit />} variant="outlined" onClick={() => setConvertOpen(true)}>Convertir</Button>
           <Button startIcon={<Add />} variant="contained" onClick={() => setOpen(true)}>Nuevo movimiento</Button>
         </Stack>
@@ -118,12 +118,12 @@ function ConvertDialog({ onClose }: { onClose: () => void }) {
 
           <Typography variant="subtitle2" fontWeight={700}>Productos origen (se consumen)</Typography>
           {sources.map((s) => (
-            <Stack key={s.key} direction="row" spacing={1} alignItems="center">
-              <Autocomplete size="small" sx={{ flex: 1 }} options={products ?? []} getOptionLabel={(p) => p.name}
+            <Stack key={s.key} direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Autocomplete size="small" sx={{ flex: '1 1 160px' }} options={products ?? []} getOptionLabel={(p) => p.name}
                 value={s.product} onChange={(_, v) => setSource(s.key, { product: v })}
                 renderInput={(params) => <TextField {...params} label="Producto" />} />
               <TextField size="small" type="number" label="Cant." sx={{ width: 90 }}
-                value={s.quantity} onChange={(e) => setSource(s.key, { quantity: Math.max(1, Number(e.target.value)) })} />
+                value={s.quantity || ''} onChange={(e) => setSource(s.key, { quantity: e.target.value === '' ? 0 : Number(e.target.value) })} />
               <IconButton size="small" onClick={() => removeSource(s.key)} disabled={sources.length === 1}>
                 <DeleteOutline fontSize="small" />
               </IconButton>
@@ -145,8 +145,8 @@ function ConvertDialog({ onClose }: { onClose: () => void }) {
           ) : (
             <TextField size="small" label="Nombre del producto nuevo" value={destNewName} onChange={(e) => setDestNewName(e.target.value)} />
           )}
-          <TextField size="small" type="number" label="Cantidad producida" value={destQuantity}
-            onChange={(e) => setDestQuantity(Math.max(1, Number(e.target.value)))} />
+          <TextField size="small" type="number" label="Cantidad producida" value={destQuantity || ''}
+            onChange={(e) => setDestQuantity(e.target.value === '' ? 0 : Number(e.target.value))} />
 
           <TextField size="small" label="Motivo (opcional)" value={reason} onChange={(e) => setReason(e.target.value)} />
           {convert.isError && <Alert severity="error">No se pudo convertir (¿stock suficiente en los productos origen?).</Alert>}
@@ -201,17 +201,17 @@ function MovementDialog({ onClose }: { onClose: () => void }) {
           <Autocomplete size="small" options={products ?? []} getOptionLabel={(p) => p.name}
             value={product} onChange={(_, v) => setProduct(v)}
             renderInput={(params) => <TextField {...params} label="Producto" />} />
-          <TextField size="small" type="number" label="Cantidad" value={quantity} onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))} />
+          <TextField size="small" type="number" label="Cantidad" value={quantity || ''} onChange={(e) => setQuantity(e.target.value === '' ? 0 : Number(e.target.value))} />
           <Grid container spacing={2}>
             {needsFrom && (
-              <Grid item xs={needsTo ? 6 : 12}>
+              <Grid item xs={12} sm={needsTo ? 6 : 12}>
                 <TextField fullWidth size="small" select label="Origen" value={fromWarehouseId} onChange={(e) => setFrom(e.target.value)}>
                   {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
                 </TextField>
               </Grid>
             )}
             {needsTo && (
-              <Grid item xs={needsFrom ? 6 : 12}>
+              <Grid item xs={12} sm={needsFrom ? 6 : 12}>
                 <TextField fullWidth size="small" select label="Destino" value={toWarehouseId} onChange={(e) => setTo(e.target.value)}>
                   {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
                 </TextField>

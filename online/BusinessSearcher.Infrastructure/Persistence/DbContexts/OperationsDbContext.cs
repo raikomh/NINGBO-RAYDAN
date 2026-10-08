@@ -27,12 +27,12 @@ namespace BusinessSearcher.Infrastructure.Persistence.DbContexts
         public DbSet<Sale>         Sales         => Set<Sale>();
         public DbSet<SaleItem>     SaleItems     => Set<SaleItem>();
         public DbSet<SalePayment>  SalePayments  => Set<SalePayment>();
-        public DbSet<Terminal>     Terminals     => Set<Terminal>();
         public DbSet<CashRegister> CashRegisters => Set<CashRegister>();
         public DbSet<CashMovement> CashMovements => Set<CashMovement>();
 
         // Sub-usuarios operativos
-        public DbSet<OperationsUser> OperationsUsers => Set<OperationsUser>();
+        public DbSet<Manager> Managers => Set<Manager>();
+        public DbSet<OperationsUser>OperationsUsers => Set<OperationsUser>();
 
         // Compras e inventario avanzado
         public DbSet<PurchaseRequest>    PurchaseRequests    => Set<PurchaseRequest>();
