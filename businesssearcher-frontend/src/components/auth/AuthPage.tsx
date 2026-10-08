@@ -110,10 +110,10 @@ function LoginPanel({ active, onSwitch }: { active: boolean; onSwitch: () => voi
       const password = data.password.trim();
       if (employeeMode) {
         await loginOps(data.email, password);
-        navigate('/dashboard/ops/pos');
+        navigate('/dashboard/select-store?next=' + encodeURIComponent('/dashboard/ops/pos'));
       } else {
         await login(data.email, password);
-        navigate('/dashboard');
+        navigate('/dashboard/select-store?next=' + encodeURIComponent('/dashboard'));
       }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;

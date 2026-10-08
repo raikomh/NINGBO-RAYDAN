@@ -16,6 +16,7 @@ const ForgotPasswordPage = lazy(() => import('@/components/auth/ForgotPasswordPa
 const ResetPasswordPage = lazy(() => import('@/components/auth/ResetPasswordPage'));
 
 const OverviewPage = lazy(() => import('@/components/dashboard/pages/OverviewPage'));
+const StoreSelectPage = lazy(() => import('@/components/dashboard/pages/StoreSelectPage'));
 const AccountPage = lazy(() => import('@/components/dashboard/pages/AccountPage'));
 const SearchPage = lazy(() => import('@/components/dashboard/pages/SearchPage'));
 const WholesaleCatalogPage = lazy(() => import('@/components/dashboard/pages/WholesaleCatalogPage'));
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="/verify-email" element={<VerifyEmailPage />} />
 
               <Route element={<RequireAuth />}>
+                <Route path="/dashboard/select-store" element={<StoreSelectPage />} />
                 <Route element={<SubscriptionGate />}>
                   <Route element={<DashboardLayout />}>
                     <Route path="/dashboard" element={<OverviewPage />} />
