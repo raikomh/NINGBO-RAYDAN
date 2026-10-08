@@ -76,14 +76,17 @@ function UserDialog({ user, onClose }: { user: OpsUser | null; onClose: () => vo
   const [isActive, setIsActive] = useState(user?.isActive ?? true);
 
   const submit = () => {
+    // Recorta espacios del password (típico de autocompletado/copy-paste): si no, un espacio
+    // invisible queda guardado en el hash y el usuario no puede iniciar sesión con lo que ve.
+    const trimmedPassword = password.trim();
     if (user) {
       const dto: UpdateOpsUser = {
         name, role, assignedWarehouseId: warehouseId || undefined, isActive,
-        newPassword: password || undefined,
+        newPassword: trimmedPassword || undefined,
       };
       save.mutate({ id: user.id, dto }, { onSuccess: onClose });
     } else {
-      const dto: CreateOpsUser = { name, email, password, role, assignedWarehouseId: warehouseId || undefined };
+      const dto: CreateOpsUser = { name, email, password: trimmedPassword, role, assignedWarehouseId: warehouseId || undefined };
       save.mutate({ dto }, { onSuccess: onClose });
     }
   };

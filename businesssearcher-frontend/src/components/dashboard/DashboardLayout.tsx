@@ -5,6 +5,7 @@ import { Menu as MenuIcon, NavigateNext as NextIcon } from '@mui/icons-material'
 import Sidebar, { DRAWER_WIDTH, DRAWER_COLLAPSED_WIDTH } from './Sidebar';
 import ChatWidget from '@/components/chat/ChatWidget';
 import OpsNotificationsBell from './OpsNotificationsBell';
+import StoreSwitcher from './StoreSwitcher';
 import { useAuth } from '@/context/AuthContext';
 import { isLocalDeployment } from '@/lib/deployment';
 
@@ -96,6 +97,7 @@ export default function DashboardLayout() {
               {pageTitle}
             </Typography>
 
+            {pathname.startsWith('/dashboard/ops') && <StoreSwitcher />}
             <OpsNotificationsBell />
           </Toolbar>
         </AppBar>

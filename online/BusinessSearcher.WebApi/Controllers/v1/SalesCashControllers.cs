@@ -17,8 +17,8 @@ namespace BusinessSearcher.API.Controllers.v1
     {
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] DateTime? from, [FromQuery] DateTime? to,
-            [FromQuery] Guid? registerId, [FromQuery] Guid? cashierId, CancellationToken ct)
-            => Ok(await Mediator.Send(new GetSalesQuery(from, to, registerId, cashierId), ct));
+            [FromQuery] Guid? registerId, [FromQuery] Guid? cashierId, [FromQuery] Guid? warehouseId, CancellationToken ct)
+            => Ok(await Mediator.Send(new GetSalesQuery(from, to, registerId, cashierId, warehouseId), ct));
 
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById(Guid id, CancellationToken ct)

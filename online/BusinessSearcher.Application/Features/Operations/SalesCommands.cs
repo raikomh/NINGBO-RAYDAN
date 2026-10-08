@@ -41,7 +41,7 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
     public record CreateSaleCommand(CreateSaleDto Dto) : IRequest<SaleDto>;
     public record UpdateSaleCommand(Guid Id, UpdateSaleDto Dto) : IRequest<SaleDto>;
     public record RefundSaleCommand(Guid Id) : IRequest<SaleDto>;
-    public record GetSalesQuery(DateTime? From, DateTime? To, Guid? RegisterId, Guid? CashierId) : IRequest<IReadOnlyList<SaleDto>>;
+    public record GetSalesQuery(DateTime? From, DateTime? To, Guid? RegisterId, Guid? CashierId, Guid? WarehouseId = null) : IRequest<IReadOnlyList<SaleDto>>;
     public record GetSaleByIdQuery(Guid Id) : IRequest<SaleDto>;
 
     /// <summary>
@@ -254,7 +254,7 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
         public async Task<IReadOnlyList<SaleDto>> Handle(GetSalesQuery r, CancellationToken ct)
         {
             var t = OpsMapper.RequireTenant(_u);
-            var sales = await _repo.GetByTenantAsync(t, r.From, OpsMapper.EndOfDay(r.To), r.RegisterId, r.CashierId, ct);
+            var sales = await _repo.GetByTenantAsync(t, r.From, OpsMapper.EndOfDay(r.To), r.RegisterId, r.CashierId, r.WarehouseId, ct);
             var names = (await _users.GetByTenantAsync(t, ct)).ToDictionary(w => w.Id, w => w.Name);
             return sales.Select(s => SalesMapper.WithCashierName(SalesMapper.ToDto(s), names)).ToList();
         }

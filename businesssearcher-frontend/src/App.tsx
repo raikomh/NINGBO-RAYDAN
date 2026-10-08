@@ -5,6 +5,7 @@ import { Box, CircularProgress } from '@mui/material';
 
 import { AuthProvider } from '@/context/AuthContext';
 import { AppThemeProvider } from '@/context/ThemeContext';
+import { StoreProvider } from '@/context/StoreContext';
 import RequireAuth from '@/components/dashboard/RequireAuth';
 import SubscriptionGate from '@/components/dashboard/SubscriptionGate';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
@@ -61,6 +62,7 @@ export default function App() {
     <AppThemeProvider>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+      <StoreProvider>
         <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Suspense fallback={<PageFallback />}>
             <Routes>
@@ -103,6 +105,7 @@ export default function App() {
             </Routes>
           </Suspense>
         </BrowserRouter>
+      </StoreProvider>
       </AuthProvider>
     </QueryClientProvider>
     </AppThemeProvider>

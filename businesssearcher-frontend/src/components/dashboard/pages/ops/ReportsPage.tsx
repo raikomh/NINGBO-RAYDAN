@@ -16,6 +16,7 @@ import {
   useSalesReport, useExportSalesReport, useInventoryReport, useExportInventoryReport,
   useExpensesReport, useExportExpensesReport, useMonthlyDashboard, useDashboardSummary,
 } from '@/hooks/useOps';
+import { useActiveStore } from '@/context/StoreContext';
 
 const money = (n: number | null | undefined) => (n ?? 0).toLocaleString('es', { maximumFractionDigits: 2 });
 
@@ -82,7 +83,8 @@ function KpiCard({ label, value, icon, color }: KpiCardProps) {
 function DashboardTab() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [currency, setCurrency] = useState<'CUP' | 'USD'>('CUP');
-  const { data, isLoading } = useMonthlyDashboard(year);
+  const { storeId } = useActiveStore();
+  const { data, isLoading } = useMonthlyDashboard(year, storeId);
 
   const [rangeFrom, setRangeFrom] = useState('');
   const [rangeTo, setRangeTo] = useState('');
@@ -268,7 +270,8 @@ function DashboardTab() {
 function SalesReportTab() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const { data: report, isLoading } = useSalesReport({ from: from || undefined, to: to || undefined });
+  const { storeId } = useActiveStore();
+  const { data: report, isLoading } = useSalesReport({ from: from || undefined, to: to || undefined, warehouseId: storeId });
   const exportReport = useExportSalesReport();
 
   return (
@@ -285,7 +288,7 @@ function SalesReportTab() {
             </Stack>
           )}
           <Button startIcon={<Download />} variant="contained" disabled={exportReport.isPending}
-            onClick={() => exportReport.mutate({ from: from || undefined, to: to || undefined })}>Exportar Excel</Button>
+            onClick={() => exportReport.mutate({ from: from || undefined, to: to || undefined, warehouseId: storeId })}>Exportar Excel</Button>
         </CardContent>
       </Card>
 
@@ -321,7 +324,8 @@ function SalesReportTab() {
 
 function InventoryReportTab() {
   const [lowStockOnly, setLowStockOnly] = useState(false);
-  const { data: report, isLoading } = useInventoryReport(lowStockOnly);
+  const { storeId } = useActiveStore();
+  const { data: report, isLoading } = useInventoryReport(lowStockOnly, storeId);
   const exportReport = useExportInventoryReport();
 
   return (
@@ -338,7 +342,7 @@ function InventoryReportTab() {
             </Stack>
           )}
           <Button startIcon={<Download />} variant="contained" disabled={exportReport.isPending}
-            onClick={() => exportReport.mutate(lowStockOnly)}>Exportar Excel</Button>
+            onClick={() => exportReport.mutate({ lowStockOnly, warehouseId: storeId })}>Exportar Excel</Button>
         </CardContent>
       </Card>
 

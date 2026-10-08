@@ -126,8 +126,8 @@ export default function AccountPage() {
     setPwError('');
     try {
       await api.post('/api/v1/auth/change-password', {
-        currentPassword: data.currentPassword,
-        newPassword: data.newPassword,
+        currentPassword: data.currentPassword.trim(),
+        newPassword: data.newPassword.trim(),
       });
       setPwSuccess(true);
       resetPw();

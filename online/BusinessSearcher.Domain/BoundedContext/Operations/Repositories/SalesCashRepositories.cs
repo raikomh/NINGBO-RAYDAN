@@ -6,7 +6,7 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Repositories
     {
         Task<Sale?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default);
         Task<IReadOnlyList<Sale>> GetByTenantAsync(Guid tenantId, DateTime? from, DateTime? to,
-            Guid? registerId, Guid? cashierId, CancellationToken ct = default);
+            Guid? registerId, Guid? cashierId, Guid? warehouseId = null, CancellationToken ct = default);
         Task AddAsync(Sale sale, CancellationToken ct = default);
         Task UpdateAsync(Sale sale, CancellationToken ct = default);
     }

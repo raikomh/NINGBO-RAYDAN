@@ -48,7 +48,7 @@ namespace BusinessSearcher.Application.Features.Operations.Payroll
                 var baseSalary = cfg?.BaseSalary ?? 0m;
                 var pct = cfg?.SalesPercentage ?? 0m;
 
-                var workerSales = await sales.GetByTenantAsync(tenantId, fromUtc, toUtc, null, worker.Id, ct);
+                var workerSales = await sales.GetByTenantAsync(tenantId, fromUtc, toUtc, null, worker.Id, ct: ct);
                 var ventas = workerSales.Where(s => s.Status != SaleStatus.Refunded).Sum(s => s.Total);
 
                 var comision = Math.Max(0, ventas - minimoExento) * (pct / 100m);

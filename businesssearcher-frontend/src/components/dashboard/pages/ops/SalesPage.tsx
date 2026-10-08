@@ -8,6 +8,7 @@ import {
 import { Receipt, Visibility, Undo, Edit, Print, Add, PointOfSale, Download, UploadFile } from '@mui/icons-material';
 import { useOpsSales, useRefundSale, useUpdateSale, useExportSalesReport } from '@/hooks/useOps';
 import { useIsOpsAdmin, useHasOpsRole } from '@/hooks/useOpsRole';
+import { useActiveStore } from '@/context/StoreContext';
 import SaleReceipt from './SaleReceipt';
 import SalesImportDialog from '../../dialogs/SalesImportDialog';
 import type { OpsSale } from '@/lib/opsTypes';
@@ -18,7 +19,8 @@ export default function SalesPage() {
   const navigate = useNavigate();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const { data: sales, isLoading } = useOpsSales({ from: from || undefined, to: to || undefined });
+  const { storeId } = useActiveStore();
+  const { data: sales, isLoading } = useOpsSales({ from: from || undefined, to: to || undefined, warehouseId: storeId || undefined });
   const [selected, setSelected] = useState<OpsSale | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const exportReport = useExportSalesReport();

@@ -17,9 +17,13 @@ import {
 import type { OpsProduct, CreateOpsProduct } from '@/lib/opsTypes';
 import ImportProductsDialog from '@/components/dashboard/dialogs/ImportProductsDialog';
 import { useHasOpsRole } from '@/hooks/useOpsRole';
+import { useActiveStore } from '@/context/StoreContext';
 
 export default function InventoryPage() {
-  const [warehouseId, setWarehouseId] = useState<string>('');
+  const { storeId } = useActiveStore();
+  // Arranca en la tienda activa del selector global, pero se puede cambiar solo en esta página
+  // sin afectar la selección global (p.ej. para revisar el stock de otra tienda puntualmente).
+  const [warehouseId, setWarehouseId] = useState<string>(storeId ?? '');
   const [search, setSearch] = useState('');
   const [lowStockOnly, setLowStockOnly] = useState(false);
 

@@ -26,13 +26,14 @@ namespace BusinessSearcher.Infrastructure.Persistence.Repositories.Operations
                 .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.Id == id, ct);
 
         public async Task<IReadOnlyList<Sale>> GetByTenantAsync(Guid tenantId, DateTime? from, DateTime? to,
-            Guid? registerId, Guid? cashierId, CancellationToken ct = default)
+            Guid? registerId, Guid? cashierId, Guid? warehouseId = null, CancellationToken ct = default)
         {
             var q = _db.Sales.Include(s => s.Items).Include(s => s.Payments).Where(s => s.TenantId == tenantId);
             if (from.HasValue)       q = q.Where(s => s.Date >= from.Value.ToUtc());
             if (to.HasValue)         q = q.Where(s => s.Date <= to.Value.ToUtc());
             if (registerId.HasValue) q = q.Where(s => s.RegisterId == registerId.Value);
             if (cashierId.HasValue)  q = q.Where(s => s.CashierId == cashierId.Value);
+            if (warehouseId.HasValue) q = q.Where(s => s.Items.Any(i => i.WarehouseId == warehouseId.Value));
             return await q.OrderByDescending(s => s.Date).ToListAsync(ct);
         }
 

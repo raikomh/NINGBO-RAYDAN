@@ -6,8 +6,8 @@ using MediatR;
 
 namespace BusinessSearcher.Application.Features.Operations.Reports
 {
-    public record GetSalesReportQuery(DateTime? From, DateTime? To) : IRequest<SalesReportDto>;
-    public record GetInventoryReportQuery(bool? LowStockOnly) : IRequest<InventoryReportDto>;
+    public record GetSalesReportQuery(DateTime? From, DateTime? To, Guid? WarehouseId = null) : IRequest<SalesReportDto>;
+    public record GetInventoryReportQuery(bool? LowStockOnly, Guid? WarehouseId = null) : IRequest<InventoryReportDto>;
     public record GetExpensesReportQuery(DateTime? From, DateTime? To) : IRequest<ExpensesReportDto>;
 
     public class GetSalesReportHandler : IRequestHandler<GetSalesReportQuery, SalesReportDto>
@@ -17,7 +17,7 @@ namespace BusinessSearcher.Application.Features.Operations.Reports
         public async Task<SalesReportDto> Handle(GetSalesReportQuery r, CancellationToken ct)
         {
             var t = OpsMapper.RequireTenant(_u);
-            var sales = await _sales.GetByTenantAsync(t, r.From, r.To, null, null, ct);
+            var sales = await _sales.GetByTenantAsync(t, r.From, r.To, null, null, r.WarehouseId, ct);
             var rows = sales.Select(s => new SalesReportRowDto(
                 s.Date, s.RegisterId, s.PaymentMethod.ToString(), s.PaymentCurrency.ToString(), s.Total, s.Status.ToString())).ToList();
             var totalSales = sales.Where(s => s.Status == SaleStatus.Completed).Sum(s => s.Total);
@@ -33,10 +33,15 @@ namespace BusinessSearcher.Application.Features.Operations.Reports
         public async Task<InventoryReportDto> Handle(GetInventoryReportQuery r, CancellationToken ct)
         {
             var t = OpsMapper.RequireTenant(_u);
-            var products = await _products.GetByTenantAsync(t, null, null, null, r.LowStockOnly, ct);
+            var products = await _products.GetByTenantAsync(t, null, null, r.WarehouseId, r.LowStockOnly, ct);
+            // Con tienda seleccionada, la cantidad es la existencia en ESE almacén, no la suma de todos
+            // (TotalStock), para que el reporte refleje solo lo que hay en la tienda activa.
+            int StockFor(Domain.BoundedContext.Operations.Aggregates.Product p) => r.WarehouseId.HasValue
+                ? p.Stocks.Where(s => s.WarehouseId == r.WarehouseId.Value).Sum(s => s.Quantity)
+                : p.TotalStock;
             var rows = products.Select(p => new InventoryReportRowDto(
-                p.Name, p.Barcode, p.TotalStock, p.MinStock, p.SellPrice, p.TotalStock <= p.MinStock)).ToList();
-            var value = products.Sum(p => p.TotalStock * p.CostPrice);
+                p.Name, p.Barcode, StockFor(p), p.MinStock, p.SellPrice, StockFor(p) <= p.MinStock)).ToList();
+            var value = products.Sum(p => StockFor(p) * p.CostPrice);
             return new InventoryReportDto(products.Count, rows.Count(x => x.LowStock), value, rows);
         }
     }
@@ -57,7 +62,7 @@ namespace BusinessSearcher.Application.Features.Operations.Reports
     // ═══════════════════════════════════════════════════════════════
     // DASHBOARD MENSUAL — ventas, compras, mermas, gastos y ganancia por mes de un año
     // ═══════════════════════════════════════════════════════════════
-    public record GetMonthlyDashboardQuery(int? Year) : IRequest<MonthlyDashboardDto>;
+    public record GetMonthlyDashboardQuery(int? Year, Guid? WarehouseId = null) : IRequest<MonthlyDashboardDto>;
 
     public class GetMonthlyDashboardHandler : IRequestHandler<GetMonthlyDashboardQuery, MonthlyDashboardDto>
     {
@@ -86,13 +91,13 @@ namespace BusinessSearcher.Application.Features.Operations.Reports
             var t = OpsMapper.RequireTenant(_u);
             var year = r.Year ?? DateTime.UtcNow.Year;
 
-            var (months, yearProfit, yearSales, yearCost, yearPurchases, yearExpenses, yearMerma) = await ComputeYearAsync(t, year, ct);
+            var (months, yearProfit, yearSales, yearCost, yearPurchases, yearExpenses, yearMerma) = await ComputeYearAsync(t, year, r.WarehouseId, ct);
 
             decimal? prevProfit = null;
             decimal? changePercent = null;
             if (year > 1) // no tiene sentido comparar contra "año 0"; guarda simple contra overflow
             {
-                var (_, prevYearProfit, _, _, _, _, _) = await ComputeYearAsync(t, year - 1, ct);
+                var (_, prevYearProfit, _, _, _, _, _) = await ComputeYearAsync(t, year - 1, r.WarehouseId, ct);
                 prevProfit = prevYearProfit;
                 if (prevYearProfit != 0)
                     changePercent = Math.Round((yearProfit - prevYearProfit) / Math.Abs(prevYearProfit) * 100m, 2);
@@ -105,14 +110,16 @@ namespace BusinessSearcher.Application.Features.Operations.Reports
 
         private async Task<(IReadOnlyList<MonthlyDashboardRowDto> Months, decimal YearProfit,
             decimal YearSales, decimal YearCost, decimal YearPurchases, decimal YearExpenses, decimal YearMerma)>
-            ComputeYearAsync(Guid tenantId, int year, CancellationToken ct)
+            ComputeYearAsync(Guid tenantId, int year, Guid? warehouseId, CancellationToken ct)
         {
             var yearStart = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             var yearEnd   = yearStart.AddYears(1).AddTicks(-1);
 
-            var sales     = await _sales.GetByTenantAsync(tenantId, yearStart, yearEnd, null, null, ct);
-            var purchases = await _purchases.GetByTenantAsync(tenantId, yearStart, yearEnd, null, ct);
-            var movements = await _movements.GetByTenantAsync(tenantId, yearStart, yearEnd, null, null, ct);
+            var sales     = await _sales.GetByTenantAsync(tenantId, yearStart, yearEnd, null, null, warehouseId, ct);
+            var purchases = await _purchases.GetByTenantAsync(tenantId, yearStart, yearEnd, null, warehouseId, ct);
+            var movements = await _movements.GetByTenantAsync(tenantId, yearStart, yearEnd, null, warehouseId, ct);
+            // Los gastos (alquiler, salarios, etc.) son del negocio completo, no de una tienda puntual:
+            // no se filtran por almacén aunque haya una tienda seleccionada.
             var expenses  = await _expenses.GetByTenantAsync(tenantId, yearStart, yearEnd, ct);
             var products  = await _products.GetByTenantAsync(tenantId, null, null, null, null, ct);
             var costById  = products.ToDictionary(p => p.Id, p => p.CostPrice);

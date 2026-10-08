@@ -15,7 +15,7 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Repositories
     public interface IPurchaseRepository
     {
         Task<Purchase?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default);
-        Task<IReadOnlyList<Purchase>> GetByTenantAsync(Guid tenantId, DateTime? from, DateTime? to, Guid? supplierId, CancellationToken ct = default);
+        Task<IReadOnlyList<Purchase>> GetByTenantAsync(Guid tenantId, DateTime? from, DateTime? to, Guid? supplierId, Guid? warehouseId = null, CancellationToken ct = default);
         Task AddAsync(Purchase purchase, CancellationToken ct = default);
     }
 

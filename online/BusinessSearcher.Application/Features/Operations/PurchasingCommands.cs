@@ -238,7 +238,7 @@ namespace BusinessSearcher.Application.Features.Operations.Purchases
         public async Task<IReadOnlyList<PurchaseDto>> Handle(GetPurchasesQuery r, CancellationToken ct)
         {
             var t = OpsMapper.RequireTenant(_u);
-            return (await _repo.GetByTenantAsync(t, r.From, OpsMapper.EndOfDay(r.To), r.SupplierId, ct)).Select(PurchasingMapper.ToDto).ToList();
+            return (await _repo.GetByTenantAsync(t, r.From, OpsMapper.EndOfDay(r.To), r.SupplierId, ct: ct)).Select(PurchasingMapper.ToDto).ToList();
         }
     }
 

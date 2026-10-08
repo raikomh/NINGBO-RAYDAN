@@ -72,29 +72,29 @@ namespace BusinessSearcher.API.Controllers.v1
         /// compras, productos merma y ganancia mes a mes, con comparación contra el año anterior.
         /// </summary>
         [HttpGet("dashboard")]
-        public async Task<IActionResult> Dashboard([FromQuery] int? year, CancellationToken ct)
-            => Ok(await Mediator.Send(new GetMonthlyDashboardQuery(year), ct));
+        public async Task<IActionResult> Dashboard([FromQuery] int? year, [FromQuery] Guid? warehouseId, CancellationToken ct)
+            => Ok(await Mediator.Send(new GetMonthlyDashboardQuery(year, warehouseId), ct));
 
         [HttpGet("sales")]
-        public async Task<IActionResult> Sales([FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)
-            => Ok(await Mediator.Send(new GetSalesReportQuery(from, to), ct));
+        public async Task<IActionResult> Sales([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] Guid? warehouseId, CancellationToken ct)
+            => Ok(await Mediator.Send(new GetSalesReportQuery(from, to, warehouseId), ct));
 
         [HttpGet("sales/export")]
-        public async Task<IActionResult> ExportSales([FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)
+        public async Task<IActionResult> ExportSales([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] Guid? warehouseId, CancellationToken ct)
         {
-            var report = await Mediator.Send(new GetSalesReportQuery(from, to), ct);
+            var report = await Mediator.Send(new GetSalesReportQuery(from, to, warehouseId), ct);
             var bytes = _exporter.ExportSales(report);
             return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "reporte-ventas.xlsx");
         }
 
         [HttpGet("inventory")]
-        public async Task<IActionResult> Inventory([FromQuery] bool? lowStockOnly, CancellationToken ct)
-            => Ok(await Mediator.Send(new GetInventoryReportQuery(lowStockOnly), ct));
+        public async Task<IActionResult> Inventory([FromQuery] bool? lowStockOnly, [FromQuery] Guid? warehouseId, CancellationToken ct)
+            => Ok(await Mediator.Send(new GetInventoryReportQuery(lowStockOnly, warehouseId), ct));
 
         [HttpGet("inventory/export")]
-        public async Task<IActionResult> ExportInventory([FromQuery] bool? lowStockOnly, CancellationToken ct)
+        public async Task<IActionResult> ExportInventory([FromQuery] bool? lowStockOnly, [FromQuery] Guid? warehouseId, CancellationToken ct)
         {
-            var report = await Mediator.Send(new GetInventoryReportQuery(lowStockOnly), ct);
+            var report = await Mediator.Send(new GetInventoryReportQuery(lowStockOnly, warehouseId), ct);
             var bytes = _exporter.ExportInventory(report);
             return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "reporte-inventario.xlsx");
         }

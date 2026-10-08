@@ -227,7 +227,7 @@ export function useImportOpsProducts() {
 }
 
 // ── Ventas ──
-export function useOpsSales(params?: { from?: string; to?: string; registerId?: string; cashierId?: string }) {
+export function useOpsSales(params?: { from?: string; to?: string; registerId?: string; cashierId?: string; warehouseId?: string }) {
   return useQuery<OpsSale[]>({
     queryKey: ['ops', 'sales', params],
     queryFn: () => safeGet('/api/v1/ops/sales', params as Record<string, unknown>),
@@ -605,11 +605,11 @@ const downloadBlob = async (url: string, params: Record<string, unknown> | undef
   window.URL.revokeObjectURL(blobUrl);
 };
 
-export function useMonthlyDashboard(year?: number) {
+export function useMonthlyDashboard(year?: number, warehouseId?: string | null) {
   return useQuery<MonthlyDashboard>({
-    queryKey: ['ops', 'reports', 'dashboard', year],
+    queryKey: ['ops', 'reports', 'dashboard', year, warehouseId],
     queryFn: async () => {
-      const res = await api.get('/api/v1/ops/reports/dashboard', { params: { year } });
+      const res = await api.get('/api/v1/ops/reports/dashboard', { params: { year, warehouseId: warehouseId || undefined } });
       return (res.data?.data ?? res.data) as MonthlyDashboard;
     },
   });
@@ -623,30 +623,33 @@ export function useDashboardSummary(params: { from?: string; to?: string }) {
     },
   });
 }
-export function useSalesReport(params?: { from?: string; to?: string }) {
+export function useSalesReport(params?: { from?: string; to?: string; warehouseId?: string | null }) {
   return useQuery<SalesReport>({
     queryKey: ['ops', 'reports', 'sales', params],
     queryFn: async () => {
-      const res = await api.get('/api/v1/ops/reports/sales', { params });
+      const res = await api.get('/api/v1/ops/reports/sales', { params: { ...params, warehouseId: params?.warehouseId || undefined } });
       return (res.data?.data ?? res.data) as SalesReport;
     },
   });
 }
 export function useExportSalesReport() {
-  return useMutation({ mutationFn: (params?: { from?: string; to?: string }) => downloadBlob('/api/v1/ops/reports/sales/export', params, 'reporte-ventas.xlsx') });
+  return useMutation({ mutationFn: (params?: { from?: string; to?: string; warehouseId?: string | null }) => downloadBlob('/api/v1/ops/reports/sales/export', { ...params, warehouseId: params?.warehouseId || undefined }, 'reporte-ventas.xlsx') });
 }
 
-export function useInventoryReport(lowStockOnly?: boolean) {
+export function useInventoryReport(lowStockOnly?: boolean, warehouseId?: string | null) {
   return useQuery<InventoryReport>({
-    queryKey: ['ops', 'reports', 'inventory', lowStockOnly],
+    queryKey: ['ops', 'reports', 'inventory', lowStockOnly, warehouseId],
     queryFn: async () => {
-      const res = await api.get('/api/v1/ops/reports/inventory', { params: lowStockOnly ? { lowStockOnly } : undefined });
+      const res = await api.get('/api/v1/ops/reports/inventory', { params: { lowStockOnly: lowStockOnly || undefined, warehouseId: warehouseId || undefined } });
       return (res.data?.data ?? res.data) as InventoryReport;
     },
   });
 }
 export function useExportInventoryReport() {
-  return useMutation({ mutationFn: (lowStockOnly?: boolean) => downloadBlob('/api/v1/ops/reports/inventory/export', lowStockOnly ? { lowStockOnly } : undefined, 'reporte-inventario.xlsx') });
+  return useMutation({
+    mutationFn: ({ lowStockOnly, warehouseId }: { lowStockOnly?: boolean; warehouseId?: string | null } = {}) =>
+      downloadBlob('/api/v1/ops/reports/inventory/export', { lowStockOnly: lowStockOnly || undefined, warehouseId: warehouseId || undefined }, 'reporte-inventario.xlsx'),
+  });
 }
 
 export function useExpensesReport(params?: { from?: string; to?: string }) {

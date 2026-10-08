@@ -7,6 +7,7 @@ import {
 import { Add, Remove, DeleteOutline, PointOfSale, Search, Print, CheckCircle } from '@mui/icons-material';
 import { useOpsProducts, useWarehouses, useCurrentCashRegister, useCreateSale, useOpsManagers, useExchangeRate, fetchProductByBarcode } from '@/hooks/useOps';
 import type { OpsProduct, OpsCurrency, OpsPaymentMethod, CreateOpsSale, OpsSale } from '@/lib/opsTypes';
+import { useActiveStore } from '@/context/StoreContext';
 import { useNavigate } from 'react-router-dom';
 import SaleReceipt from './SaleReceipt';
 import OrdenEntregaReceipt, { type OrdenEntregaDeliveryInfo } from './OrdenEntregaReceipt';
@@ -24,6 +25,7 @@ export default function PosPage() {
   const { data: warehouses } = useWarehouses();
   const { data: register } = useCurrentCashRegister();
   const { data: rate } = useExchangeRate();
+  const { storeId } = useActiveStore();
   const [warehouseId, setWarehouseId] = useState('');
   const [search, setSearch] = useState('');
 
@@ -31,8 +33,9 @@ export default function PosPage() {
   // Sin esto, "effectiveWarehouse" caía al primer almacén de la lista aunque la caja se hubiera
   // abierto contra otro: el producto se veía en stock (con el stock de OTRO almacén) pero al
   // vender, AdjustStock validaba el almacén real y tiraba "Stock insuficiente" — se sentía como
-  // si la caja abierta no dejara vender.
-  useEffect(() => { setWarehouseId(register?.warehouseId ?? ''); }, [register?.id]);
+  // si la caja abierta no dejara vender. Si la caja no tiene almacén propio, cae a la tienda activa
+  // del selector global (si hay una elegida).
+  useEffect(() => { setWarehouseId(register?.warehouseId ?? storeId ?? ''); }, [register?.id, storeId]);
   const { data: products, isLoading } = useOpsProducts({ search: search || undefined, warehouseId: warehouseId || undefined });
 
   const [cart, setCart] = useState<CartLine[]>([]);

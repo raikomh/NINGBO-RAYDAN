@@ -37,12 +37,13 @@ namespace BusinessSearcher.Infrastructure.Persistence.Repositories.Operations
         public Task<Purchase?> GetByIdAsync(Guid tenantId, Guid id, CancellationToken ct = default)
             => _db.Purchases.Include(p => p.Items).FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Id == id, ct);
 
-        public async Task<IReadOnlyList<Purchase>> GetByTenantAsync(Guid tenantId, DateTime? from, DateTime? to, Guid? supplierId, CancellationToken ct = default)
+        public async Task<IReadOnlyList<Purchase>> GetByTenantAsync(Guid tenantId, DateTime? from, DateTime? to, Guid? supplierId, Guid? warehouseId = null, CancellationToken ct = default)
         {
             var q = _db.Purchases.Include(p => p.Items).Where(p => p.TenantId == tenantId);
             if (from.HasValue)       q = q.Where(p => p.Date >= from.Value.ToUtc());
             if (to.HasValue)         q = q.Where(p => p.Date <= to.Value.ToUtc());
             if (supplierId.HasValue) q = q.Where(p => p.SupplierId == supplierId.Value);
+            if (warehouseId.HasValue) q = q.Where(p => p.WarehouseId == warehouseId.Value);
             return await q.OrderByDescending(p => p.Date).ToListAsync(ct);
         }
 
