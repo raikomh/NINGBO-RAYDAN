@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
-  MenuItem, Box, Typography, Alert, Table, TableHead, TableBody, TableRow, TableCell,
+  Box, Typography, Alert, Table, TableHead, TableBody, TableRow, TableCell,
   ToggleButtonGroup, ToggleButton,
 } from '@mui/material';
 import { UploadFile } from '@mui/icons-material';
 import { useImportOpsProducts, useWarehouses } from '@/hooks/useOps';
+import { useActiveStore } from '@/context/StoreContext';
 import type { ImportPriceConflict, ImportPriceDecision, ImportProductsResult } from '@/lib/opsTypes';
 
 interface Props {
@@ -18,9 +19,13 @@ interface Props {
 export default function ImportProductsDialog({ open, onClose, onImported }: Props) {
   const importMutation = useImportOpsProducts();
   const { data: warehouses } = useWarehouses();
+  // Se importa siempre a la tienda activa: no se puede elegir otra tienda desde aquí (cada
+  // tienda es independiente; un punto de venta solo administra su propio catálogo/stock).
+  const { storeId } = useActiveStore();
+  const warehouseId = storeId ?? '';
+  const activeWarehouseName = warehouses?.find((w) => w.id === storeId)?.name;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [warehouseId, setWarehouseId] = useState('');
   const [catalogDate, setCatalogDate] = useState('');
   const [exchangeRate, setExchangeRate] = useState('');
   const [serverError, setServerError] = useState('');
@@ -35,7 +40,6 @@ export default function ImportProductsDialog({ open, onClose, onImported }: Prop
 
   const handleClose = () => {
     setFile(null);
-    setWarehouseId('');
     setCatalogDate('');
     setExchangeRate('');
     setServerError('');
@@ -99,18 +103,15 @@ export default function ImportProductsDialog({ open, onClose, onImported }: Prop
 
           <Box display="flex" flexDirection="column" gap={2}>
             <TextField
-              select
-              required
               label="Almacén / punto de venta"
-              value={warehouseId}
-              onChange={(e) => setWarehouseId(e.target.value)}
-              disabled={importMutation.isPending}
-              helperText={warehouses && warehouses.length === 0 ? 'Crea un almacén antes de importar.' : 'Aquí se suma el stock.'}
-            >
-              {(warehouses ?? []).map((w) => (
-                <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>
-              ))}
-            </TextField>
+              value={activeWarehouseName ?? ''}
+              disabled
+              helperText={
+                warehouses && warehouses.length === 0
+                  ? 'Crea un almacén antes de importar.'
+                  : 'Siempre se importa a tu tienda activa; aquí se suma el stock.'
+              }
+            />
 
             <TextField
               type="date"
