@@ -82,7 +82,8 @@ function KpiCard({ label, value, icon, color }: KpiCardProps) {
 
 function DashboardTab() {
   const [year, setYear] = useState(new Date().getFullYear());
-  const [currency, setCurrency] = useState<'CUP' | 'USD'>('CUP');
+  // Ventas solo en USD por ahora: se esconde el toggle de moneda, el dashboard siempre
+  // muestra las columnas *Usd del backend (el CUP sigue calculándose internamente).
   const { storeId } = useActiveStore();
   const { data, isLoading } = useMonthlyDashboard(year, storeId);
 
@@ -90,21 +91,19 @@ function DashboardTab() {
   const [rangeTo, setRangeTo] = useState('');
   const { data: rangeSummary, isLoading: rangeLoading } = useDashboardSummary({ from: rangeFrom || undefined, to: rangeTo || undefined });
 
-  const sym = currency === 'USD' ? '$' : '';
-  const suffix = currency === 'USD' ? ' USD' : ' CUP';
-  const fmt = (n: number) => `${sym}${money(n)}`;
+  const fmt = (n: number) => `$${money(n)}`;
 
   const chartData = useMemo(
     () => (data?.months ?? []).map((m) => ({
       name: m.monthLabel,
-      Ventas: currency === 'USD' ? m.salesTotalUsd : m.salesTotal,
-      'Costo de venta': currency === 'USD' ? m.costOfGoodsSoldUsd : m.costOfGoodsSold,
-      Compras: currency === 'USD' ? m.purchasesTotalUsd : m.purchasesTotal,
-      Gastos: currency === 'USD' ? m.expensesTotalUsd : m.expensesTotal,
-      Merma: currency === 'USD' ? m.mermaValueUsd : m.mermaValue,
-      Ganancia: currency === 'USD' ? m.profitUsd : m.profit,
+      Ventas: m.salesTotalUsd,
+      'Costo de venta': m.costOfGoodsSoldUsd,
+      Compras: m.purchasesTotalUsd,
+      Gastos: m.expensesTotalUsd,
+      Merma: m.mermaValueUsd,
+      Ganancia: m.profitUsd,
     })),
-    [data, currency],
+    [data],
   );
 
   const changeUp = (data?.profitChangePercent ?? 0) >= 0;
@@ -127,11 +126,6 @@ function DashboardTab() {
           />
         )}
         <Box flexGrow={1} />
-        <ToggleButtonGroup size="small" exclusive value={currency} onChange={(_, v) => v && setCurrency(v)}>
-          <ToggleButton value="CUP">CUP</ToggleButton>
-          <ToggleButton value="USD">USD</ToggleButton>
-        </ToggleButtonGroup>
-        {data?.exchangeRate && <Chip size="small" variant="outlined" label={`Tasa: ${data.exchangeRate} CUP/USD`} />}
       </Box>
 
       {isLoading ? (
@@ -140,28 +134,28 @@ function DashboardTab() {
         <>
           <Grid container spacing={2} mb={3}>
             <Grid item xs={12} sm={6} md={2}>
-              <KpiCard label="Ventas del año" value={fmt(currency === 'USD' ? (data?.yearSalesTotalUsd ?? 0) : (data?.yearSalesTotal ?? 0))} icon={<PointOfSale />} color="#10B981" />
+              <KpiCard label="Ventas del año" value={fmt(data?.yearSalesTotalUsd ?? 0)} icon={<PointOfSale />} color="#10B981" />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <KpiCard label="Costo de venta del año" value={fmt(currency === 'USD' ? (data?.yearCostOfGoodsSoldUsd ?? 0) : (data?.yearCostOfGoodsSold ?? 0))} icon={<Sell />} color="#F97316" />
+              <KpiCard label="Costo de venta del año" value={fmt(data?.yearCostOfGoodsSoldUsd ?? 0)} icon={<Sell />} color="#F97316" />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <KpiCard label="Compras del año" value={fmt(currency === 'USD' ? (data?.yearPurchasesTotalUsd ?? 0) : (data?.yearPurchasesTotal ?? 0))} icon={<ShoppingCart />} color="#2563EB" />
+              <KpiCard label="Compras del año" value={fmt(data?.yearPurchasesTotalUsd ?? 0)} icon={<ShoppingCart />} color="#2563EB" />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <KpiCard label="Gastos del año" value={fmt(currency === 'USD' ? (data?.yearExpensesTotalUsd ?? 0) : (data?.yearExpensesTotal ?? 0))} icon={<Payments />} color="#F59E0B" />
+              <KpiCard label="Gastos del año" value={fmt(data?.yearExpensesTotalUsd ?? 0)} icon={<Payments />} color="#F59E0B" />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <KpiCard label="Valor en mermas" value={fmt(currency === 'USD' ? (data?.yearMermaValueUsd ?? 0) : (data?.yearMermaValue ?? 0))} icon={<DeleteSweep />} color="#EF4444" />
+              <KpiCard label="Valor en mermas" value={fmt(data?.yearMermaValueUsd ?? 0)} icon={<DeleteSweep />} color="#EF4444" />
             </Grid>
             <Grid item xs={12} sm={6} md={2}>
-              <KpiCard label="Ganancia del año" value={fmt(currency === 'USD' ? (data?.yearProfitUsd ?? 0) : (data?.yearProfit ?? 0))} icon={<AttachMoney />} color="#7C3AED" />
+              <KpiCard label="Ganancia del año" value={fmt(data?.yearProfitUsd ?? 0)} icon={<AttachMoney />} color="#7C3AED" />
             </Grid>
           </Grid>
 
           <Card variant="outlined" sx={{ borderRadius: 2, p: { xs: 1, sm: 2 }, mb: 3 }}>
             <Typography variant="subtitle1" fontWeight={600} mb={1} sx={{ px: { xs: 1, sm: 0 } }}>
-              Ventas, costo de venta, compras, gastos, mermas y ganancia por mes ({currency})
+              Ventas, costo de venta, compras, gastos, mermas y ganancia por mes (USD)
             </Typography>
             <Box sx={{ width: '100%', height: { xs: 260, sm: 340 } }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -197,15 +191,15 @@ function DashboardTab() {
               </TableHead>
               <TableBody>
                 {(data?.months ?? []).map((m) => {
-                  const profit = currency === 'USD' ? m.profitUsd : m.profit;
+                  const profit = m.profitUsd;
                   return (
                     <TableRow key={m.month} hover>
                       <TableCell>{m.monthLabel}</TableCell>
-                      <TableCell align="right">{fmt(currency === 'USD' ? m.salesTotalUsd : m.salesTotal)}</TableCell>
-                      <TableCell align="right">{fmt(currency === 'USD' ? m.costOfGoodsSoldUsd : m.costOfGoodsSold)}</TableCell>
-                      <TableCell align="right">{fmt(currency === 'USD' ? m.purchasesTotalUsd : m.purchasesTotal)}</TableCell>
-                      <TableCell align="right">{fmt(currency === 'USD' ? m.expensesTotalUsd : m.expensesTotal)}</TableCell>
-                      <TableCell align="right">{fmt(currency === 'USD' ? m.mermaValueUsd : m.mermaValue)}</TableCell>
+                      <TableCell align="right">{fmt(m.salesTotalUsd)}</TableCell>
+                      <TableCell align="right">{fmt(m.costOfGoodsSoldUsd)}</TableCell>
+                      <TableCell align="right">{fmt(m.purchasesTotalUsd)}</TableCell>
+                      <TableCell align="right">{fmt(m.expensesTotalUsd)}</TableCell>
+                      <TableCell align="right">{fmt(m.mermaValueUsd)}</TableCell>
                       <TableCell align="right">
                         <Typography
                           component="span"
@@ -241,22 +235,22 @@ function DashboardTab() {
             ) : rangeSummary ? (
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6} md={2}>
-                  <KpiCard label={`Ventas (${rangeSummary.salesCount})`} value={fmt(currency === 'USD' ? rangeSummary.salesTotalUsd : rangeSummary.salesTotal)} icon={<PointOfSale />} color="#10B981" />
+                  <KpiCard label={`Ventas (${rangeSummary.salesCount})`} value={fmt(rangeSummary.salesTotalUsd)} icon={<PointOfSale />} color="#10B981" />
                 </Grid>
                 <Grid item xs={12} sm={6} md={2}>
-                  <KpiCard label="Costo de venta" value={fmt(currency === 'USD' ? rangeSummary.costOfGoodsSoldUsd : rangeSummary.costOfGoodsSold)} icon={<Sell />} color="#F97316" />
+                  <KpiCard label="Costo de venta" value={fmt(rangeSummary.costOfGoodsSoldUsd)} icon={<Sell />} color="#F97316" />
                 </Grid>
                 <Grid item xs={12} sm={6} md={2}>
-                  <KpiCard label="Compras" value={fmt(currency === 'USD' ? rangeSummary.purchasesTotalUsd : rangeSummary.purchasesTotal)} icon={<ShoppingCart />} color="#2563EB" />
+                  <KpiCard label="Compras" value={fmt(rangeSummary.purchasesTotalUsd)} icon={<ShoppingCart />} color="#2563EB" />
                 </Grid>
                 <Grid item xs={12} sm={6} md={2}>
-                  <KpiCard label="Gastos" value={fmt(currency === 'USD' ? rangeSummary.expensesTotalUsd : rangeSummary.expensesTotal)} icon={<Payments />} color="#F59E0B" />
+                  <KpiCard label="Gastos" value={fmt(rangeSummary.expensesTotalUsd)} icon={<Payments />} color="#F59E0B" />
                 </Grid>
                 <Grid item xs={12} sm={6} md={2}>
-                  <KpiCard label="Mermas" value={fmt(currency === 'USD' ? rangeSummary.mermaValueUsd : rangeSummary.mermaValue)} icon={<DeleteSweep />} color="#EF4444" />
+                  <KpiCard label="Mermas" value={fmt(rangeSummary.mermaValueUsd)} icon={<DeleteSweep />} color="#EF4444" />
                 </Grid>
                 <Grid item xs={12} sm={6} md={2}>
-                  <KpiCard label="Ganancia" value={fmt(currency === 'USD' ? rangeSummary.profitUsd : rangeSummary.profit)} icon={<AttachMoney />} color="#7C3AED" />
+                  <KpiCard label="Ganancia" value={fmt(rangeSummary.profitUsd)} icon={<AttachMoney />} color="#7C3AED" />
                 </Grid>
               </Grid>
             ) : null}
@@ -283,8 +277,8 @@ function SalesReportTab() {
           <Box flexGrow={1} />
           {report && (
             <Stack direction="row" spacing={1} flexWrap="wrap">
-              <Chip color="primary" label={`Ventas: ${report.totalSales.toFixed(2)} CUP ($${report.totalSalesUsd.toFixed(2)})`} />
-              <Chip color="error" label={`Reembolsado: ${report.totalRefunded.toFixed(2)} CUP ($${report.totalRefundedUsd.toFixed(2)})`} />
+              <Chip color="primary" label={`Ventas: $${report.totalSalesUsd.toFixed(2)}`} />
+              <Chip color="error" label={`Reembolsado: $${report.totalRefundedUsd.toFixed(2)}`} />
             </Stack>
           )}
           <Button startIcon={<Download />} variant="contained" disabled={exportReport.isPending}
@@ -297,23 +291,17 @@ function SalesReportTab() {
       ) : (
         <TableContainer component={Card} variant="outlined">
           <Table size="small">
-            <TableHead><TableRow><TableCell>Fecha</TableCell><TableCell>Método</TableCell><TableCell>Moneda</TableCell><TableCell align="right">Total</TableCell><TableCell>Estado</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>Fecha</TableCell><TableCell>Método</TableCell><TableCell align="right">Total</TableCell><TableCell>Estado</TableCell></TableRow></TableHead>
             <TableBody>
               {(report?.rows ?? []).map((r, i) => (
                 <TableRow key={i} hover>
                   <TableCell>{new Date(r.date).toLocaleString()}</TableCell>
                   <TableCell>{r.paymentMethod}</TableCell>
-                  <TableCell>{r.currency}</TableCell>
-                  <TableCell align="right">
-                    {r.total.toFixed(2)}
-                    {r.totalUsd != null && (
-                      <Typography variant="caption" color="text.secondary" display="block">${r.totalUsd.toFixed(2)}</Typography>
-                    )}
-                  </TableCell>
+                  <TableCell align="right">${(r.totalUsd ?? r.total).toFixed(2)}</TableCell>
                   <TableCell><Chip size="small" color={r.status === 'Refunded' ? 'error' : 'success'} label={r.status} /></TableCell>
                 </TableRow>
               ))}
-              {(report?.rows ?? []).length === 0 && <TableRow><TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin ventas en el período</TableCell></TableRow>}
+              {(report?.rows ?? []).length === 0 && <TableRow><TableCell colSpan={4} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin ventas en el período</TableCell></TableRow>}
             </TableBody>
           </Table>
         </TableContainer>

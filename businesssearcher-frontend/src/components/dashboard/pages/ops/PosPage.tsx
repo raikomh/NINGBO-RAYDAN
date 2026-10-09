@@ -39,7 +39,9 @@ export default function PosPage() {
   const { data: products, isLoading } = useOpsProducts({ search: search || undefined, warehouseId: warehouseId || undefined });
 
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [currency, setCurrency] = useState<OpsCurrency>('CUP');
+  // Ventas solo en USD por ahora: se esconde el selector de moneda (CUP queda deshabilitado
+  // temporalmente, no se elimina el soporte del código por si se reactiva más adelante).
+  const currency: OpsCurrency = 'USD';
   const [payDialog, setPayDialog] = useState(false);
   const [lastSale, setLastSale] = useState<OpsSale | null>(null);
   const [lastDelivery, setLastDelivery] = useState<OrdenEntregaDeliveryInfo | null>(null);
@@ -186,10 +188,7 @@ export default function PosPage() {
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                 <Typography variant="h6" fontWeight={700}>Carrito</Typography>
-                <ToggleButtonGroup size="small" exclusive value={currency} onChange={(_, v) => v && setCurrency(v)}>
-                  <ToggleButton value="CUP">CUP</ToggleButton>
-                  <ToggleButton value="USD">USD</ToggleButton>
-                </ToggleButtonGroup>
+                <Chip label="USD" size="small" color="primary" variant="outlined" />
               </Box>
               <Divider />
               <List dense sx={{ maxHeight: 340, overflow: 'auto' }}>
@@ -230,7 +229,7 @@ export default function PosPage() {
                 {rate?.rate && (
                   <Box display="flex" justifyContent="flex-end">
                     <Typography variant="caption" color="text.secondary">
-                      {currency === 'CUP' ? `≈ $${(total / rate.rate).toFixed(2)} USD` : `≈ ${(total * rate.rate).toFixed(2)} CUP`}
+                      ≈ {(total * rate.rate).toFixed(2)} CUP
                     </Typography>
                   </Box>
                 )}

@@ -12,7 +12,7 @@ import {
 import {
   useOpsProducts, useSaveOpsProduct, useDeleteOpsProduct, useAdjustStock,
   useWarehouses, useOpsCategories, useSaveOpsCategory,
-  useSetProductPublicVisibility, useUploadOpsProductImage,
+  useSetProductPublicVisibility, useUploadOpsProductImage, useExchangeRate,
 } from '@/hooks/useOps';
 import type { OpsProduct, CreateOpsProduct } from '@/lib/opsTypes';
 import ImportProductsDialog from '@/components/dashboard/dialogs/ImportProductsDialog';
@@ -120,18 +120,8 @@ export default function InventoryPage() {
                     </TableCell>
                     <TableCell>{p.barcode ?? '—'}</TableCell>
                     <TableCell>{catName(p.categoryId)}</TableCell>
-                    <TableCell align="right">
-                      {p.costPrice.toFixed(2)}
-                      {p.costPriceUSD != null && (
-                        <Typography variant="caption" color="text.secondary" display="block">${p.costPriceUSD.toFixed(2)}</Typography>
-                      )}
-                    </TableCell>
-                    <TableCell align="right">
-                      {p.sellPrice.toFixed(2)}
-                      {p.sellPriceUSD != null && (
-                        <Typography variant="caption" color="text.secondary" display="block">${p.sellPriceUSD.toFixed(2)}</Typography>
-                      )}
-                    </TableCell>
+                    <TableCell align="right">{p.costPriceUSD != null ? `$${p.costPriceUSD.toFixed(2)}` : '—'}</TableCell>
+                    <TableCell align="right">{p.sellPriceUSD != null ? `$${p.sellPriceUSD.toFixed(2)}` : '—'}</TableCell>
                     <TableCell align="right">
                       <Chip size="small" color={low ? 'warning' : 'default'} label={st}
                         variant={low ? 'filled' : 'outlined'} />
@@ -209,6 +199,7 @@ export default function InventoryPage() {
 function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClose: () => void }) {
   const { data: categories } = useOpsCategories();
   const { data: warehouses } = useWarehouses();
+  const { data: rate } = useExchangeRate();
   const save = useSaveOpsProduct();
   const setVisibility = useSetProductPublicVisibility();
   const uploadImage = useUploadOpsProductImage();
@@ -244,9 +235,15 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
     if (product) setVisibility.mutate({ id: product.id, isPubliclyVisible: checked });
   };
 
+  // Ventas solo en USD por ahora: el formulario ya no pide costo/precio en CUP, se derivan
+  // solos de su valor en USD y la tasa de cambio vigente (el dominio todavía guarda ambos).
+  const cupFrom = (usd?: number) => (usd != null && rate?.rate ? Math.round(usd * rate.rate * 100) / 100 : 0);
+
   const submit = () => {
     const dto: CreateOpsProduct = {
       ...form,
+      costPrice: cupFrom(form.costPriceUSD),
+      sellPrice: cupFrom(form.sellPriceUSD),
       categoryId: form.categoryId || undefined,
       barcode: form.barcode || undefined,
       // en edición, la visibilidad se actualiza aparte (toggle en vivo más abajo)
@@ -294,10 +291,8 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
           </Grid>
           <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Stock mínimo" value={form.minStock || ''} onChange={(e) => set('minStock', e.target.value === '' ? 0 : Number(e.target.value))} /></Grid>
 
-          <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Costo CUP" value={form.costPrice || ''} onChange={(e) => set('costPrice', e.target.value === '' ? 0 : Number(e.target.value))} /></Grid>
-          <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Venta CUP" value={form.sellPrice || ''} onChange={(e) => set('sellPrice', e.target.value === '' ? 0 : Number(e.target.value))} /></Grid>
-          <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Costo USD" value={form.costPriceUSD ?? ''} onChange={(e) => set('costPriceUSD', num(e.target.value))} /></Grid>
-          <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Venta USD" value={form.sellPriceUSD ?? ''} onChange={(e) => set('sellPriceUSD', num(e.target.value))} /></Grid>
+          <Grid item xs={6} sm={6}><TextField fullWidth size="small" type="number" label="Costo" value={form.costPriceUSD ?? ''} onChange={(e) => set('costPriceUSD', num(e.target.value))} InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} /></Grid>
+          <Grid item xs={6} sm={6}><TextField fullWidth size="small" type="number" label="Precio de venta" value={form.sellPriceUSD ?? ''} onChange={(e) => set('sellPriceUSD', num(e.target.value))} InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} /></Grid>
 
           <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Impuesto %" value={form.taxRate ?? ''} onChange={(e) => set('taxRate', num(e.target.value))} /></Grid>
           <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Venta mínima (mayorista)" value={form.minOrderQuantity || ''} onChange={(e) => set('minOrderQuantity', e.target.value === '' ? 1 : Number(e.target.value))} /></Grid>
