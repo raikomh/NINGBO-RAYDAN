@@ -1,8 +1,9 @@
 import { Box, Typography, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
-import { useBusinessInfo } from '@/hooks/useOps';
+import { useBusinessInfo, useWarehouses } from '@/hooks/useOps';
 import type { OpsSale } from '@/lib/opsTypes';
 
 export interface OrdenEntregaDeliveryInfo {
+  noOrden?: string;
   cliente?: string;
   ci?: string;
   telefono?: string;
@@ -25,17 +26,22 @@ export default function OrdenEntregaReceipt({
   className?: string;
 }) {
   const { data: business } = useBusinessInfo();
+  const { data: warehouses } = useWarehouses();
+  const storeWarehouseId = sale.items[0]?.warehouseId;
+  const storeAddress = warehouses?.find((w) => w.id === storeWarehouseId)?.location;
   const domicilio = delivery?.domicilio ?? 0;
   const importeTotal = sale.subtotal - sale.discount + domicilio;
 
   return (
     <Box className={className} sx={{ p: 2, maxWidth: 420, mx: 'auto', fontFamily: 'Arial, sans-serif' }}>
       <Typography align="center" variant="h6" fontWeight={800}>ORDEN DE ENTREGA</Typography>
-      {business?.name && <Typography align="center" fontWeight={700} sx={{ mt: 0.5 }}>{business.name}</Typography>}
+      {(sale.warehouseName || business?.name) && (
+        <Typography align="center" fontWeight={700} sx={{ mt: 0.5 }}>{sale.warehouseName || business?.name}</Typography>
+      )}
 
       <Box display="flex" justifyContent="space-between" mt={1.5}>
         <Typography variant="body2"><strong>Cliente:</strong> {delivery?.cliente || '—'}</Typography>
-        <Typography variant="body2"><strong>No.Orden:</strong> {sale.id.slice(0, 8).toUpperCase()}</Typography>
+        <Typography variant="body2"><strong>No.Orden:</strong> {delivery?.noOrden || sale.id.slice(0, 8).toUpperCase()}</Typography>
       </Box>
       <Box display="flex" justifyContent="space-between">
         <Typography variant="body2">
@@ -43,9 +49,12 @@ export default function OrdenEntregaReceipt({
         </Typography>
         <Typography variant="body2"><strong>Fecha:</strong> {new Date(sale.date).toLocaleDateString('es-ES')}</Typography>
       </Box>
-      <Typography variant="body2" sx={{ mt: 0.5 }}>
-        <strong>Dirección:</strong> {delivery?.direccion || business?.address || '—'}
-      </Typography>
+      <Box display="flex" justifyContent="space-between">
+        <Typography variant="body2" sx={{ mt: 0.5 }}>
+          <strong>Dirección:</strong> {delivery?.direccion || '—'}
+        </Typography>
+        <Typography variant="body2"><strong>Código:</strong> {sale.managerCode || '—'}</Typography>
+      </Box>
 
       <Table size="small" sx={{ mt: 1.5 }}>
         <TableHead>
@@ -88,6 +97,11 @@ export default function OrdenEntregaReceipt({
       </Box>
 
       <Typography align="center" fontWeight={700} sx={{ mt: 3 }}>GRACIAS POR ELEGIRNOS</Typography>
+      {storeAddress && (
+        <Typography align="center" variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+          Dirección: {storeAddress}
+        </Typography>
+      )}
     </Box>
   );
 }

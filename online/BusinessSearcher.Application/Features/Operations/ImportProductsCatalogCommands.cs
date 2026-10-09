@@ -40,14 +40,15 @@ namespace BusinessSearcher.Application.Features.Operations.Products
         private readonly ICatalogImportRepository _catalogImports;
         private readonly IOperationsUnitOfWork _uow;
         private readonly ICurrentUserService _u;
+        private readonly IFileStorageService _fileStorage;
 
         public ImportProductsCatalogHandler(
             IExcelProductCatalogParser parser, ICategoryRepository categories, IProductRepository products,
             IWarehouseRepository warehouses, IExchangeRateRepository rates, ICatalogImportRepository catalogImports,
-            IOperationsUnitOfWork uow, ICurrentUserService u)
+            IOperationsUnitOfWork uow, ICurrentUserService u, IFileStorageService fileStorage)
         {
             _parser = parser; _categories = categories; _products = products; _warehouses = warehouses;
-            _rates = rates; _catalogImports = catalogImports; _uow = uow; _u = u;
+            _rates = rates; _catalogImports = catalogImports; _uow = uow; _u = u; _fileStorage = fileStorage;
         }
 
         public async Task<ImportProductsResultDto> Handle(ImportProductsCatalogCommand r, CancellationToken ct)
@@ -122,16 +123,19 @@ namespace BusinessSearcher.Application.Features.Operations.Products
 
             var results = new List<ImportedProductDto>();
             var pricesUpdated = 0;
+            var imagesUploaded = 0;
+            var imagesFailed = 0;
             foreach (var row in parsed.Rows)
             {
                 var existing = existingByBarcode[row.Barcode];
+                var imageUrl = await TryUploadRowImageAsync(t, row, ct, r => imagesUploaded++, r => imagesFailed++);
 
                 if (existing is null)
                 {
                     var sellPrice = rate is null ? 0m : Math.Round(row.PriceUsd * rate.Value, 2, MidpointRounding.AwayFromZero);
                     var product = Product.Create(t, row.Name, costPrice: 0m, sellPrice: sellPrice, barcode: row.Barcode,
                         description: row.Description, categoryId: categoryIds[CategoryKey(row.Category)],
-                        sellPriceUsd: row.PriceUsd, isPubliclyVisible: false);
+                        sellPriceUsd: row.PriceUsd, imageUrl: imageUrl, isPubliclyVisible: false);
 
                     if (row.Stock > 0)
                         product.AdjustStock(warehouse.Id, row.Stock);
@@ -139,6 +143,15 @@ namespace BusinessSearcher.Application.Features.Operations.Products
                     await _products.AddAsync(product, ct);
                     results.Add(new ImportedProductDto(row.Barcode, product.Id, "Creado", 0, row.Stock, null));
                     continue;
+                }
+
+                // No se pisa una foto ya cargada manualmente; solo se completa si el producto no tenía.
+                if (imageUrl is not null && string.IsNullOrEmpty(existing.ImageUrl))
+                {
+                    existing.Update(existing.Name, existing.CostPrice, existing.SellPrice, existing.Barcode,
+                        existing.Description, existing.Unit, existing.CategoryId, existing.CostPriceUSD,
+                        existing.SellPriceUSD, existing.MinStock, existing.TaxRate, existing.BatchNumber,
+                        existing.ExpirationDate, existing.ForSale, imageUrl, existing.MinOrderQuantity);
                 }
 
                 var previous = existing.Stocks.FirstOrDefault(s => s.WarehouseId == warehouse.Id)?.Quantity ?? 0;
@@ -186,6 +199,8 @@ namespace BusinessSearcher.Application.Features.Operations.Products
                 warnings.Add("Los productos nuevos quedan ocultos en la búsqueda pública hasta que los publiques.");
             if (pricesUpdated > 0)
                 warnings.Add($"Precio del archivo aplicado solo en {warehouse.Name} a {pricesUpdated} producto(s).");
+            if (imagesFailed > 0)
+                warnings.Add($"No se pudo subir la foto de {imagesFailed} producto(s) del archivo.");
 
             return new ImportProductsResultDto(
                 NeedsDecision: false,
@@ -211,6 +226,29 @@ namespace BusinessSearcher.Application.Features.Operations.Products
                 result[barcode.Trim()] = a;
             }
             return result;
+        }
+
+        /// <summary>Sube la foto incrustada en la fila del Excel (si trae una) a Backblaze. Nunca aborta el
+        /// import: si falla la subida de una foto puntual, esa fila sigue sin imagen y se avisa al final.</summary>
+        private async Task<string?> TryUploadRowImageAsync(
+            Guid tenantId, ProductCatalogRowDto row, CancellationToken ct, Action<ProductCatalogRowDto> onSuccess,
+            Action<ProductCatalogRowDto> onFailure)
+        {
+            if (row.ImageBytes is null || row.ImageContentType is null) return null;
+            try
+            {
+                using var ms = new MemoryStream(row.ImageBytes);
+                var ext = row.ImageContentType switch { "image/png" => ".png", "image/webp" => ".webp", _ => ".jpg" };
+                var url = await _fileStorage.UploadAsync(
+                    ms, $"{row.Barcode}{ext}", row.ImageContentType, $"products/{tenantId:N}", ct);
+                onSuccess(row);
+                return url;
+            }
+            catch
+            {
+                onFailure(row);
+                return null;
+            }
         }
 
         private static decimal Cents(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);

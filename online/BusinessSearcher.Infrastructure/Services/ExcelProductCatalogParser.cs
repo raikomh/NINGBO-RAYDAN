@@ -2,18 +2,28 @@ using System.Globalization;
 using System.Text;
 using BusinessSearcher.Application.Commons.Interfaces;
 using ClosedXML.Excel;
+using ClosedXML.Excel.Drawings;
 
 namespace BusinessSearcher.Infrastructure.Services
 {
     /// <summary>
     /// Lee el catálogo de productos (Excel). Busca la fila de encabezados (puede haber un título encima)
     /// y reconoce las columnas sin importar tildes ni mayúsculas: Código, Producto, Categoría,
-    /// Cant. disponible, Precio x unidad (USD). Descripción es opcional. La columna Imagen no se lee aquí.
+    /// Cant. disponible, Precio x unidad (USD). Descripción es opcional. Si el archivo trae fotos
+    /// incrustadas (pegadas sobre la fila de cada producto, no en una columna de texto), se extraen y se
+    /// asocian por la fila donde está anclada cada imagen.
     /// Valida el archivo completo antes de devolver filas (todo-o-nada).
     /// </summary>
     public class ClosedXmlProductCatalogParser : IExcelProductCatalogParser
     {
         private const int MaxHeaderSearchRows = 20;
+
+        private static readonly Dictionary<XLPictureFormat, string> ImageContentTypes = new()
+        {
+            [XLPictureFormat.Jpeg] = "image/jpeg",
+            [XLPictureFormat.Png]  = "image/png",
+            [XLPictureFormat.Webp] = "image/webp",
+        };
 
         public ExcelProductCatalogParseResult Parse(Stream fileStream)
         {
@@ -21,6 +31,8 @@ namespace BusinessSearcher.Infrastructure.Services
             var ws = workbook.Worksheets.First();
             var lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
             var lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+
+            var imagesByRow = ReadImagesByRow(ws);
 
             var headerRow = FindHeaderRow(ws, lastRow, lastCol);
             if (headerRow == 0)
@@ -91,8 +103,10 @@ namespace BusinessSearcher.Infrastructure.Services
                 }
 
                 var description = descCol > 0 ? Text(row.Cell(descCol)) : string.Empty;
+                imagesByRow.TryGetValue(r, out var image);
                 rows.Add(new ProductCatalogRowDto(
-                    r, code, name, category, (int)stock, price, description.Length == 0 ? null : description));
+                    r, code, name, category, (int)stock, price, description.Length == 0 ? null : description,
+                    image.Bytes, image.ContentType));
             }
 
             if (rows.Count == 0 && errors.Count == 0)
@@ -100,6 +114,26 @@ namespace BusinessSearcher.Infrastructure.Services
 
             return new ExcelProductCatalogParseResult(
                 errors.Count == 0, errors.Count == 0 ? rows : Array.Empty<ProductCatalogRowDto>(), errors);
+        }
+
+        /// <summary>Lee las fotos pegadas en la hoja y las asocia a la fila donde está anclada cada una
+        /// (su esquina superior izquierda). Si dos imágenes caen en la misma fila, se queda con la primera.
+        /// Formatos no soportados por el almacenamiento (gif, bmp, tiff, etc.) se ignoran.</summary>
+        private static Dictionary<int, (byte[]? Bytes, string? ContentType)> ReadImagesByRow(IXLWorksheet ws)
+        {
+            var result = new Dictionary<int, (byte[]?, string?)>();
+            foreach (var picture in ws.Pictures)
+            {
+                if (!ImageContentTypes.TryGetValue(picture.Format, out var contentType)) continue;
+                var row = picture.TopLeftCell.Address.RowNumber;
+                if (result.ContainsKey(row)) continue;
+
+                picture.ImageStream.Position = 0;
+                using var ms = new MemoryStream();
+                picture.ImageStream.CopyTo(ms);
+                result[row] = (ms.ToArray(), contentType);
+            }
+            return result;
         }
 
         private static int FindHeaderRow(IXLWorksheet ws, int lastRow, int lastCol)

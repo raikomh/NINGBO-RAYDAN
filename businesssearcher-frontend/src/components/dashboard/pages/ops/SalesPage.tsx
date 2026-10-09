@@ -149,6 +149,7 @@ function OrdenEntregaDialog({ saleIds, onClose, onGenerated }: {
   saleIds: string[]; onClose: () => void; onGenerated: () => void;
 }) {
   const generate = useGenerateOrdenEntrega();
+  const [noOrden, setNoOrden] = useState('');
   const [cliente, setCliente] = useState('');
   const [ci, setCi] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -157,7 +158,7 @@ function OrdenEntregaDialog({ saleIds, onClose, onGenerated }: {
 
   const submit = () => {
     generate.mutate({
-      saleIds,
+      saleIds, noOrden: noOrden.trim() || undefined,
       cliente: cliente || undefined, ci: ci || undefined, telefono: telefono || undefined,
       direccion: direccion || undefined, domicilio: domicilio === '' ? undefined : domicilio,
     }, { onSuccess: onGenerated });
@@ -172,6 +173,8 @@ function OrdenEntregaDialog({ saleIds, onClose, onGenerated }: {
           Los datos de abajo son opcionales y solo se usan para este documento.
         </Typography>
         <Stack spacing={1.5}>
+          <TextField size="small" label="No. Orden" value={noOrden} onChange={(e) => setNoOrden(e.target.value)}
+            helperText="Si lo dejas vacío, se genera uno automático." />
           <TextField size="small" label="Cliente" value={cliente} onChange={(e) => setCliente(e.target.value)} />
           <Stack direction="row" spacing={1.5}>
             <TextField size="small" label="CI" value={ci} onChange={(e) => setCi(e.target.value)} fullWidth />

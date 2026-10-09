@@ -182,12 +182,12 @@ export default function PosPage() {
           </Card>
         </Grid>
 
-        {/* Carrito */}
+        {/* Productos (carrito) */}
         <Grid item xs={12} md={5}>
           <Card variant="outlined" sx={{ position: 'sticky', top: 16 }}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                <Typography variant="h6" fontWeight={700}>Carrito</Typography>
+                <Typography variant="h6" fontWeight={700}>Productos</Typography>
                 <Chip label="USD" size="small" color="primary" variant="outlined" />
               </Box>
               <Divider />
@@ -219,7 +219,7 @@ export default function PosPage() {
                       } />
                   </ListItem>
                 ))}
-                {cart.length === 0 && <Typography color="text.secondary" textAlign="center" py={3}>Carrito vacío</Typography>}
+                {cart.length === 0 && <Typography color="text.secondary" textAlign="center" py={3}>Sin productos</Typography>}
               </List>
               <Divider sx={{ my: 1 }} />
               <Stack spacing={0.5}>
@@ -331,6 +331,7 @@ function PaymentDialog({ total, currency, onClose, onConfirm, pending, error, er
 
   // Datos para la Orden de Entrega impresa (no se guardan en el sistema todavía, solo se usan
   // para generar ese documento al confirmar la venta). Se piden siempre, en toda venta.
+  const [noOrden, setNoOrden] = useState('');
   const [cliente, setCliente] = useState('');
   const [ci, setCi] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -363,6 +364,8 @@ function PaymentDialog({ total, currency, onClose, onConfirm, pending, error, er
           )}
           <Typography variant="body2" fontWeight={600}>Datos de entrega</Typography>
           <Stack spacing={1.5}>
+            <TextField size="small" label="No. Orden" value={noOrden} onChange={(e) => setNoOrden(e.target.value)}
+              helperText="Si lo dejas vacío, se genera uno automático." />
             <TextField size="small" label="Cliente" value={cliente} onChange={(e) => setCliente(e.target.value)} />
             <Stack direction="row" spacing={1.5}>
               <TextField size="small" label="CI" value={ci} onChange={(e) => setCi(e.target.value)} fullWidth />
@@ -379,6 +382,7 @@ function PaymentDialog({ total, currency, onClose, onConfirm, pending, error, er
         <Button onClick={onClose}>Cancelar</Button>
         <Button variant="contained" disabled={pending || !manager || (method === 'Cash' && tenderedValue < total)}
           onClick={() => onConfirm(method, tenderedValue, manager!.code, {
+            noOrden: noOrden.trim() || undefined,
             cliente: cliente || undefined, ci: ci || undefined, telefono: telefono || undefined,
             direccion: direccion || undefined, domicilio: domicilio === '' ? undefined : domicilio,
           })}>Confirmar venta</Button>

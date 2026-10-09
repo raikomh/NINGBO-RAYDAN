@@ -30,6 +30,7 @@ namespace BusinessSearcher.Tests.Application
         private readonly Mock<ICatalogImportRepository> _imports = new();
         private readonly Mock<IOperationsUnitOfWork> _uow = new();
         private readonly Mock<ICurrentUserService> _user = new();
+        private readonly Mock<IFileStorageService> _fileStorage = new();
         private readonly Warehouse _plaza;
         private readonly Warehouse _otra;
 
@@ -149,7 +150,7 @@ namespace BusinessSearcher.Tests.Application
         }
 
         private ImportProductsCatalogHandler Handler() => new(_parser.Object, _categories.Object, _products.Object,
-            _warehouses.Object, _rates.Object, _imports.Object, _uow.Object, _user.Object);
+            _warehouses.Object, _rates.Object, _imports.Object, _uow.Object, _user.Object, _fileStorage.Object);
 
         private ImportProductsCatalogCommand Cmd(Warehouse wh, DateOnly date, Dictionary<string, string>? decisions = null)
             => new(FakeFile(), wh.Id, 120m, date, decisions);

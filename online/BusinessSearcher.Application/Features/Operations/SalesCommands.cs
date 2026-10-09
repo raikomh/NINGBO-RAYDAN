@@ -271,10 +271,10 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
     public class GenerateOrdenEntregaHandler : IRequestHandler<GenerateOrdenEntregaQuery, OrdenEntregaDto>
     {
         private readonly ISaleRepository _sales; private readonly IProductRepository _products;
-        private readonly IBusinessInfoRepository _business; private readonly ICurrentUserService _u;
+        private readonly IWarehouseRepository _warehouses; private readonly ICurrentUserService _u;
         public GenerateOrdenEntregaHandler(ISaleRepository sales, IProductRepository products,
-            IBusinessInfoRepository business, ICurrentUserService u)
-        { _sales = sales; _products = products; _business = business; _u = u; }
+            IWarehouseRepository warehouses, ICurrentUserService u)
+        { _sales = sales; _products = products; _warehouses = warehouses; _u = u; }
 
         public async Task<OrdenEntregaDto> Handle(GenerateOrdenEntregaQuery r, CancellationToken ct)
         {
@@ -285,11 +285,21 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
             var items = new List<OrdenEntregaItemDto>();
             var codeByProduct = new Dictionary<Guid, string?>();
             string? currency = null;
+            string? storeName = null;
+            string? gestorCodigo = null;
+            Guid? warehouseId = null;
+            DateTime? fecha = null;
             foreach (var saleId in d.SaleIds.Distinct())
             {
                 var sale = await _sales.GetByIdAsync(t, saleId, ct)
                     ?? throw new DomainException($"Venta {saleId} no encontrada.");
                 currency ??= sale.PaymentCurrency.ToString();
+                // Tienda, gestor y fecha: de la primera venta (todas las ventas seleccionadas son
+                // siempre de la misma tienda activa, por el aislamiento multi-tienda del sistema).
+                storeName ??= sale.WarehouseName;
+                gestorCodigo ??= sale.ManagerCode;
+                warehouseId ??= sale.Items.FirstOrDefault()?.WarehouseId;
+                if (fecha is null || sale.Date < fecha) fecha = sale.Date;
                 foreach (var it in sale.Items)
                 {
                     if (!codeByProduct.TryGetValue(it.ProductId, out var code))
@@ -304,10 +314,13 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
 
             var subtotal = items.Sum(i => i.Importe);
             var domicilio = d.Domicilio ?? 0;
-            var business = await _business.GetByTenantAsync(t, ct);
+            var storeAddress = warehouseId is Guid wid
+                ? (await _warehouses.GetByIdAsync(t, wid, ct))?.Location
+                : null;
+            var noOrden = string.IsNullOrWhiteSpace(d.NoOrden) ? DateTime.UtcNow.ToString("yyyyMMddHHmmss") : d.NoOrden.Trim();
 
             return new OrdenEntregaDto(
-                business?.Name, DateTime.UtcNow.ToString("yyyyMMddHHmmss"), DateTime.UtcNow,
+                storeName, storeAddress, noOrden, fecha ?? DateTime.UtcNow, gestorCodigo,
                 d.Cliente, d.Ci, d.Telefono, d.Direccion, items, subtotal, domicilio, subtotal + domicilio,
                 currency ?? "CUP");
         }

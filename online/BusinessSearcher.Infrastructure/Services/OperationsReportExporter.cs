@@ -97,9 +97,9 @@ namespace BusinessSearcher.Infrastructure.Services
             ws.Cell(1, 1).Style.Font.FontSize = 16;
             ws.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
 
-            if (!string.IsNullOrWhiteSpace(orden.BusinessName))
+            if (!string.IsNullOrWhiteSpace(orden.StoreName))
             {
-                ws.Cell(2, 1).Value = orden.BusinessName;
+                ws.Cell(2, 1).Value = orden.StoreName;
                 ws.Range(2, 1, 2, 6).Merge();
                 ws.Cell(2, 1).Style.Font.Bold = true;
                 ws.Cell(2, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
@@ -110,6 +110,7 @@ namespace BusinessSearcher.Infrastructure.Services
             ws.Cell(5, 1).Value = $"ID: {orden.Ci}    Telf: {orden.Telefono}";
             ws.Cell(5, 5).Value = $"Fecha: {orden.Fecha:dd/MM/yyyy}";
             ws.Cell(6, 1).Value = $"Dirección: {orden.Direccion}";
+            ws.Cell(6, 5).Value = $"Código: {orden.GestorCodigo}";
 
             const int headerRow = 8;
             var headers = new[] { "No", "Código", "Producto", "Cantidad", "P. Unitario", "Importe" };
@@ -140,6 +141,15 @@ namespace BusinessSearcher.Infrastructure.Services
             ws.Range(row, 1, row, 6).Merge();
             ws.Cell(row, 1).Style.Font.Bold = true;
             ws.Cell(row, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            row++;
+
+            if (!string.IsNullOrWhiteSpace(orden.StoreAddress))
+            {
+                ws.Cell(row, 1).Value = $"Dirección: {orden.StoreAddress}";
+                ws.Range(row, 1, row, 6).Merge();
+                ws.Cell(row, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Cell(row, 1).Style.Font.FontSize = 9;
+            }
 
             ws.Columns().AdjustToContents();
             return ToBytes(wb);

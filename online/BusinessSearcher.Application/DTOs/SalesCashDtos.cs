@@ -17,13 +17,20 @@ namespace BusinessSearcher.Application.DTOs.Operations
         string? ManagerCode = null);
 
     // ── Orden de entrega (una o varias ventas seleccionadas, para descargar como .xlsx) ──
+    /// <param name="NoOrden">Número de orden; lo escribe quien genera el documento. Si no se indica, se usa un
+    /// consecutivo por fecha/hora.</param>
     public record GenerateOrdenEntregaDto(
-        IReadOnlyList<Guid> SaleIds, string? Cliente, string? Ci, string? Telefono, string? Direccion, decimal? Domicilio);
+        IReadOnlyList<Guid> SaleIds, string? NoOrden, string? Cliente, string? Ci, string? Telefono,
+        string? Direccion, decimal? Domicilio);
 
     public record OrdenEntregaItemDto(string? Codigo, string Producto, int Cantidad, decimal PrecioUnitario, decimal Importe);
 
+    /// <param name="StoreName">Nombre de la tienda/almacén donde se hizo la venta (no el negocio en general).</param>
+    /// <param name="StoreAddress">Dirección de esa tienda (Warehouse.Location).</param>
+    /// <param name="GestorCodigo">Código del gestor que registró la venta.</param>
     public record OrdenEntregaDto(
-        string? BusinessName, string NoOrden, DateTime Fecha, string? Cliente, string? Ci, string? Telefono,
+        string? StoreName, string? StoreAddress, string NoOrden, DateTime Fecha, string? GestorCodigo,
+        string? Cliente, string? Ci, string? Telefono,
         string? Direccion, IReadOnlyList<OrdenEntregaItemDto> Items, decimal Subtotal, decimal Domicilio,
         decimal ImporteTotal, string Currency);
 

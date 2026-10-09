@@ -3,7 +3,7 @@ import {
   Box, Button, Card, CardContent, Typography, IconButton, Chip, CircularProgress,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, Grid, FormControlLabel, Switch, Alert,
-  InputAdornment, Tooltip, Stack, Avatar, Snackbar,
+  InputAdornment, Tooltip, Stack, Avatar, Snackbar, Popper, Paper,
 } from '@mui/material';
 import {
   Add, Edit, Delete, Inventory2, Category as CategoryIcon,
@@ -207,9 +207,11 @@ export default function InventoryPage() {
   );
 }
 
-/** Foto del producto: al tocarla se amplía en un diálogo a tamaño grande. */
+/** Foto del producto: al pasar el mouse por encima se ve más grande en una vista flotante,
+ * y al tocarla se amplía en un diálogo a pantalla casi completa. */
 function ProductImage({ src, size }: { src?: string; size: number }) {
   const [zoomed, setZoomed] = useState(false);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   return (
     <>
       <Avatar
@@ -217,9 +219,19 @@ function ProductImage({ src, size }: { src?: string; size: number }) {
         variant="rounded"
         sx={{ width: size, height: size, cursor: src ? 'zoom-in' : 'default' }}
         onClick={() => src && setZoomed(true)}
+        onMouseEnter={(e) => src && setAnchor(e.currentTarget)}
+        onMouseLeave={() => setAnchor(null)}
       >
         <ImageIcon sx={{ fontSize: size * 0.5 }} />
       </Avatar>
+      {src && (
+        <Popper open={!!anchor} anchorEl={anchor} placement="right-start" sx={{ zIndex: 1300, pointerEvents: 'none' }}
+          modifiers={[{ name: 'offset', options: { offset: [0, 8] } }]}>
+          <Paper elevation={6} sx={{ p: 0.5, lineHeight: 0 }}>
+            <Box component="img" src={src} alt="" sx={{ width: 220, height: 220, objectFit: 'contain', display: 'block' }} />
+          </Paper>
+        </Popper>
+      )}
       {zoomed && src && (
         <Dialog open onClose={() => setZoomed(false)} maxWidth="lg">
           <Box

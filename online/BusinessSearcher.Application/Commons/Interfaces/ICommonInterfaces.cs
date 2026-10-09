@@ -171,7 +171,8 @@ namespace BusinessSearcher.Application.Commons.Interfaces
     }
 
     public sealed record ProductCatalogRowDto(
-        int RowNumber, string Barcode, string Name, string Category, int Stock, decimal PriceUsd, string? Description);
+        int RowNumber, string Barcode, string Name, string Category, int Stock, decimal PriceUsd, string? Description,
+        byte[]? ImageBytes = null, string? ImageContentType = null);
 
     public sealed record ExcelProductCatalogParseResult(
         bool IsValid,

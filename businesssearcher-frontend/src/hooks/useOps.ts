@@ -616,7 +616,7 @@ const downloadBlobPost = async (url: string, body: unknown, filename: string) =>
 // ── Orden de entrega (una o varias ventas seleccionadas, descarga .xlsx) ──
 export function useGenerateOrdenEntrega() {
   return useMutation({
-    mutationFn: (dto: { saleIds: string[]; cliente?: string; ci?: string; telefono?: string; direccion?: string; domicilio?: number }) =>
+    mutationFn: (dto: { saleIds: string[]; noOrden?: string; cliente?: string; ci?: string; telefono?: string; direccion?: string; domicilio?: number }) =>
       downloadBlobPost('/api/v1/ops/sales/orden-entrega', dto, 'orden-de-entrega.xlsx'),
   });
 }
