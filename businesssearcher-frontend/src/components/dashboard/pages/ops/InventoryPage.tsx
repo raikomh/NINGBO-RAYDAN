@@ -255,6 +255,9 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
   const setVisibility = useSetProductPublicVisibility();
   const uploadImage = useUploadOpsProductImage();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Un producto nuevo siempre nace en la tienda activa: nunca se elige otro almacén aquí.
+  const { storeId } = useActiveStore();
+  const activeWarehouse = warehouses?.find((w) => w.id === storeId);
   const [form, setForm] = useState<CreateOpsProduct>({
     name: product?.name ?? '',
     barcode: product?.barcode ?? '',
@@ -267,7 +270,7 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
     minStock: product?.minStock ?? 0,
     taxRate: product?.taxRate,
     forSale: product?.forSale ?? true,
-    initialWarehouseId: warehouses?.[0]?.id,
+    initialWarehouseId: storeId ?? undefined,
     initialStock: 0,
     minOrderQuantity: product?.minOrderQuantity ?? 1,
   });
@@ -349,9 +352,8 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
           {!product && (
             <>
               <Grid item xs={6} sm={4}>
-                <TextField fullWidth size="small" select label="Almacén inicial" value={form.initialWarehouseId ?? ''} onChange={(e) => set('initialWarehouseId', e.target.value)}>
-                  {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-                </TextField>
+                <TextField fullWidth size="small" label="Tienda" value={activeWarehouse?.name ?? ''} disabled
+                  helperText={activeWarehouse ? undefined : 'Selecciona una tienda arriba.'} />
               </Grid>
               <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Stock inicial" value={form.initialStock || ''} onChange={(e) => set('initialStock', e.target.value === '' ? 0 : Number(e.target.value))} /></Grid>
             </>

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Box, Card, CardContent, Typography, TextField, MenuItem, Button, IconButton, Chip,
+  Box, Card, CardContent, Typography, TextField, Button, IconButton, Chip,
   List, ListItem, ListItemText, Divider, Stack, Grid, Alert, InputAdornment, ToggleButton,
   ToggleButtonGroup, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress,
 } from '@mui/material';
 import { Add, Remove, DeleteOutline, PointOfSale, Search, Print, CheckCircle } from '@mui/icons-material';
-import { useOpsProducts, useWarehouses, useCurrentCashRegister, useCreateSale, useOpsManagers, useExchangeRate, fetchProductByBarcode } from '@/hooks/useOps';
+import { useOpsProducts, useCurrentCashRegister, useCreateSale, useOpsManagers, useExchangeRate, fetchProductByBarcode } from '@/hooks/useOps';
 import type { OpsProduct, OpsCurrency, OpsPaymentMethod, CreateOpsSale, OpsSale } from '@/lib/opsTypes';
 import { useActiveStore } from '@/context/StoreContext';
 import { useNavigate } from 'react-router-dom';
@@ -22,7 +22,6 @@ interface CartLine {
 
 export default function PosPage() {
   const navigate = useNavigate();
-  const { data: warehouses } = useWarehouses();
   const { data: register } = useCurrentCashRegister();
   const { data: rate } = useExchangeRate();
   const { storeId } = useActiveStore();
@@ -49,7 +48,9 @@ export default function PosPage() {
   const [printTarget, setPrintTarget] = useState<'ticket' | 'orden'>('ticket');
   const createSale = useCreateSale();
 
-  const effectiveWarehouse = warehouseId || warehouses?.[0]?.id || '';
+  // Nunca cae a "el primer almacén de la lista": si no hay caja/tienda activa, no hay almacén
+  // efectivo — así no se opera por accidente sobre el almacén de otra tienda.
+  const effectiveWarehouse = warehouseId;
 
   // Precio del punto de venta seleccionado: el propio del almacén si lo tiene, o el general del producto.
   const priceAt = (p: OpsProduct) => {
@@ -141,10 +142,6 @@ export default function PosPage() {
                 <TextField size="small" fullWidth placeholder="Buscar producto o escanear código…" value={search}
                   onChange={(e) => setSearch(e.target.value)} onKeyDown={handleSearchKeyDown}
                   InputProps={{ startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> }} />
-                <TextField size="small" select label="Almacén" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} sx={{ minWidth: 150, flex: '1 1 150px' }}>
-                  <MenuItem value="">{warehouses?.[0]?.name ?? 'Principal'}</MenuItem>
-                  {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-                </TextField>
               </Stack>
               {isLoading ? (
                 <Box display="flex" justifyContent="center" py={4}><CircularProgress /></Box>

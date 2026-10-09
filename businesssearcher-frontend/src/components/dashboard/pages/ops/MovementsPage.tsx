@@ -7,6 +7,7 @@ import {
 import { Add, SwapHoriz, CallSplit, DeleteOutline } from '@mui/icons-material';
 import { useInventoryMovements, useCreateMovement, useConvertInventory, useWarehouses, useOpsProducts } from '@/hooks/useOps';
 import type { OpsProduct, MovementType, CreateOpsMovement, ConvertInventoryItem } from '@/lib/opsTypes';
+import { useActiveStore } from '@/context/StoreContext';
 
 const TYPE_LABEL: Record<string, string> = { Entrada: 'Entrada', Salida: 'Salida', Traslado: 'Traslado', Merma: 'Merma' };
 const TYPE_COLOR: Record<string, 'success' | 'error' | 'info' | 'warning'> = { Entrada: 'success', Salida: 'error', Traslado: 'info', Merma: 'warning' };
@@ -71,7 +72,10 @@ interface SourceLine { key: string; product: OpsProduct | null; quantity: number
 
 function ConvertDialog({ onClose }: { onClose: () => void }) {
   const { data: warehouses } = useWarehouses();
-  const [warehouseId, setWarehouseId] = useState('');
+  // La conversión siempre es dentro de la tienda activa: no se puede elegir otro almacén aquí.
+  const { storeId } = useActiveStore();
+  const warehouseId = storeId ?? '';
+  const activeWarehouse = warehouses?.find((w) => w.id === warehouseId);
   const { data: products } = useOpsProducts({ warehouseId: warehouseId || undefined });
   const convert = useConvertInventory();
 
@@ -112,9 +116,8 @@ function ConvertDialog({ onClose }: { onClose: () => void }) {
             Consume uno o más productos origen y produce un producto destino (p.ej. desglosar una caja en unidades sueltas).
           </Typography>
 
-          <TextField size="small" select label="Almacén" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-            {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-          </TextField>
+          <TextField size="small" label="Tienda" value={activeWarehouse?.name ?? ''} disabled
+            helperText={activeWarehouse ? undefined : 'Selecciona una tienda arriba.'} />
 
           <Typography variant="subtitle2" fontWeight={700}>Productos origen (se consumen)</Typography>
           {sources.map((s) => (
@@ -162,15 +165,23 @@ function ConvertDialog({ onClose }: { onClose: () => void }) {
 
 function MovementDialog({ onClose }: { onClose: () => void }) {
   const { data: warehouses } = useWarehouses();
-  const { data: products } = useOpsProducts();
   const create = useCreateMovement();
+  // El movimiento siempre se origina/recibe en la tienda activa: Entrada/Salida/Merma quedan fijas
+  // a esa tienda. Un Traslado sí puede tener un destino en otra tienda (por definición mueve stock
+  // de la tienda activa hacia otra), pero su origen también queda fijo en la tienda activa.
+  const { storeId } = useActiveStore();
+  const activeWarehouseId = storeId ?? '';
+  const activeWarehouse = warehouses?.find((w) => w.id === activeWarehouseId);
+  // Solo productos de la tienda activa: no se puede mover algo que no está en tu almacén.
+  const { data: products } = useOpsProducts({ warehouseId: activeWarehouseId || undefined });
 
   const [type, setType] = useState<MovementType>('Entrada');
   const [product, setProduct] = useState<OpsProduct | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [fromWarehouseId, setFrom] = useState('');
-  const [toWarehouseId, setTo] = useState('');
+  const [transferToId, setTransferTo] = useState('');
   const [reason, setReason] = useState('');
+  const fromWarehouseId = activeWarehouseId;
+  const toWarehouseId = type === 'Traslado' ? transferToId : activeWarehouseId;
 
   const needsFrom = type === 'Salida' || type === 'Merma' || type === 'Traslado';
   const needsTo = type === 'Entrada' || type === 'Traslado';
@@ -205,16 +216,19 @@ function MovementDialog({ onClose }: { onClose: () => void }) {
           <Grid container spacing={2}>
             {needsFrom && (
               <Grid item xs={12} sm={needsTo ? 6 : 12}>
-                <TextField fullWidth size="small" select label="Origen" value={fromWarehouseId} onChange={(e) => setFrom(e.target.value)}>
-                  {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-                </TextField>
+                <TextField fullWidth size="small" label="Origen" value={activeWarehouse?.name ?? ''} disabled
+                  helperText={type === 'Traslado' ? 'Siempre tu tienda activa' : undefined} />
               </Grid>
             )}
             {needsTo && (
               <Grid item xs={12} sm={needsFrom ? 6 : 12}>
-                <TextField fullWidth size="small" select label="Destino" value={toWarehouseId} onChange={(e) => setTo(e.target.value)}>
-                  {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-                </TextField>
+                {type === 'Traslado' ? (
+                  <TextField fullWidth size="small" select label="Destino (otra tienda)" value={transferToId} onChange={(e) => setTransferTo(e.target.value)}>
+                    {warehouses?.filter((w) => w.id !== activeWarehouseId).map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
+                  </TextField>
+                ) : (
+                  <TextField fullWidth size="small" label="Destino" value={activeWarehouse?.name ?? ''} disabled />
+                )}
               </Grid>
             )}
           </Grid>

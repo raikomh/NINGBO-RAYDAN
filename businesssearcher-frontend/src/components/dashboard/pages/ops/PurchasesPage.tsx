@@ -10,6 +10,7 @@ import {
   useWarehouses, useOpsProducts, useSuppliers, usePurchaseRequests,
 } from '@/hooks/useOps';
 import { useIsOpsAdmin } from '@/hooks/useOpsRole';
+import { useActiveStore } from '@/context/StoreContext';
 import type { OpsProduct, OpsPurchase, CreateOpsPurchase, UpdateOpsPurchaseItem, NewPurchaseProduct } from '@/lib/opsTypes';
 
 const STATUS_LABEL: Record<string, string> = { Completed: 'Completada', Pending: 'Pendiente', Cancelled: 'Cancelada' };
@@ -82,7 +83,10 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
   const { data: approved } = usePurchaseRequests('Approved');
   const create = useCreatePurchase();
 
-  const [warehouseId, setWarehouseId] = useState('');
+  // La compra siempre entra a la tienda activa: no se puede elegir otro almacén aquí.
+  const { storeId } = useActiveStore();
+  const warehouseId = storeId ?? '';
+  const activeWarehouse = warehouses?.find((w) => w.id === warehouseId);
   const [supplierId, setSupplierId] = useState('');
   const [expenses, setExpenses] = useState(0);
   const [lines, setLines] = useState<Line[]>([]);
@@ -141,9 +145,8 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
       <DialogContent>
         <Grid container spacing={2} sx={{ mt: 0 }}>
           <Grid item xs={12} sm={4}>
-            <TextField fullWidth size="small" select label="Almacén" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-              {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-            </TextField>
+            <TextField fullWidth size="small" label="Tienda" value={activeWarehouse?.name ?? ''} disabled
+              helperText={activeWarehouse ? undefined : 'Selecciona una tienda arriba.'} />
           </Grid>
           <Grid item xs={12} sm={4}>
             <TextField fullWidth size="small" select label="Proveedor (opcional)" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>

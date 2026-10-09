@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Box, Button, Card, CardContent, Typography, Chip, CircularProgress, Stack, Grid, Alert,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, MenuItem,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
   Dialog, DialogTitle, DialogContent, DialogActions, FormControlLabel, Checkbox, IconButton, Tooltip,
 } from '@mui/material';
 import { Add, FactCheck, Visibility, CheckCircle, RadioButtonUnchecked } from '@mui/icons-material';
@@ -9,6 +9,7 @@ import {
   useInventoryCounts, useCreateCount, useCloseCount, useSetCountItemAudited, useWarehouses, useOpsProducts,
 } from '@/hooks/useOps';
 import type { OpsInventoryCount } from '@/lib/opsTypes';
+import { useActiveStore } from '@/context/StoreContext';
 
 export default function InventoryCountPage() {
   const { data: counts, isLoading } = useInventoryCounts();
@@ -77,7 +78,10 @@ export default function InventoryCountPage() {
 function CountDialog({ onClose }: { onClose: () => void }) {
   const { data: warehouses } = useWarehouses();
   const create = useCreateCount();
-  const [warehouseId, setWarehouseId] = useState('');
+  // El conteo siempre es de la tienda activa: no se puede elegir otro almacén aquí.
+  const { storeId } = useActiveStore();
+  const warehouseId = storeId ?? '';
+  const activeWarehouse = warehouses?.find((w) => w.id === warehouseId);
   const { data: products } = useOpsProducts({ warehouseId: warehouseId || undefined });
   const [counted, setCounted] = useState<Record<string, number>>({});
 
@@ -95,9 +99,8 @@ function CountDialog({ onClose }: { onClose: () => void }) {
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Nuevo conteo físico</DialogTitle>
       <DialogContent>
-        <TextField size="small" select fullWidth label="Almacén" value={warehouseId} onChange={(e) => { setWarehouseId(e.target.value); setCounted({}); }} sx={{ mt: 1, mb: 2 }}>
-          {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-        </TextField>
+        <TextField size="small" fullWidth label="Tienda" value={activeWarehouse?.name ?? ''} disabled sx={{ mt: 1, mb: 2 }}
+          helperText={activeWarehouse ? undefined : 'Selecciona una tienda arriba antes de hacer el conteo.'} />
 
         {warehouseId && (
           <TableContainer component={Card} variant="outlined">

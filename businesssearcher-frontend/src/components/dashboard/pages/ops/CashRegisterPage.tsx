@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Box, Card, CardContent, Typography, Button, TextField, MenuItem, Stack, Grid, Divider,
+  Box, Card, CardContent, Typography, Button, TextField, Stack, Grid, Divider,
   Chip, Table, TableBody, TableCell, TableHead, TableRow, TableContainer, Alert,
   Dialog, DialogTitle, DialogContent, DialogActions, ToggleButtonGroup, ToggleButton, CircularProgress,
 } from '@mui/material';
@@ -11,6 +11,7 @@ import {
   useCashMovements, useWarehouses, useOpsSales, useBusinessInfo,
 } from '@/hooks/useOps';
 import { useAuth } from '@/context/AuthContext';
+import { useActiveStore } from '@/context/StoreContext';
 import { computeCashRegisterSummary } from '@/lib/cashRegisterSummary';
 import type { OpsCashRegister, OpsCashMovement, OpsSale } from '@/lib/opsTypes';
 import CashRegisterReceipt from './CashRegisterReceipt';
@@ -24,6 +25,8 @@ export default function CashRegisterPage() {
   const { data: sales } = useOpsSales(register ? { registerId: register.id } : undefined);
   const { data: business } = useBusinessInfo();
   const { user } = useAuth();
+  const { storeId } = useActiveStore();
+  const activeWarehouse = warehouses?.find((w) => w.id === storeId);
 
   const open = useOpenRegister();
   const close = useCloseRegister();
@@ -31,7 +34,6 @@ export default function CashRegisterPage() {
 
   const [initial, setInitial] = useState<number | ''>('');
   const [initialUsd, setInitialUsd] = useState<number | ''>('');
-  const [warehouseId, setWarehouseId] = useState('');
   const [closeDialog, setCloseDialog] = useState(false);
   const [movDialog, setMovDialog] = useState(false);
 
@@ -50,26 +52,24 @@ export default function CashRegisterPage() {
           <CardContent>
             <Typography variant="h6" fontWeight={600} mb={1}>Abrir caja</Typography>
             <Typography variant="body2" color="text.secondary" mb={2}>
-              Registra el monto inicial en efectivo y el almacén del turno. El almacén es obligatorio: es lo que permite
-              exigir el conteo físico de inventario antes de poder cerrar la caja.
+              Registra el monto inicial en efectivo. La caja se abre siempre en tu tienda activa — para abrirla en
+              otra tienda, cámbiate de tienda con el selector de arriba.
             </Typography>
             <Stack spacing={2}>
+              <TextField size="small" label="Tienda" value={activeWarehouse?.name ?? ''} disabled
+                helperText={activeWarehouse ? undefined : 'Selecciona una tienda arriba antes de abrir la caja.'} />
               <TextField size="small" type="number" label="Monto inicial (CUP)" value={initial}
                 onChange={(e) => setInitial(e.target.value === '' ? '' : Number(e.target.value))} />
               <CashDenominationBreakdown currency="CUP" onApply={(t) => setInitial(t)} />
               <TextField size="small" type="number" label="Monto inicial (USD)" value={initialUsd}
                 onChange={(e) => setInitialUsd(e.target.value === '' ? '' : Number(e.target.value))} />
               <CashDenominationBreakdown currency="USD" onApply={(t) => setInitialUsd(t)} />
-              <TextField size="small" select required label="Almacén" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-                {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-                {(warehouses ?? []).length === 0 && <MenuItem value="" disabled>No hay almacenes creados</MenuItem>}
-              </TextField>
               {open.isError && <Alert severity="error">No se pudo abrir la caja.</Alert>}
-              <Button variant="contained" startIcon={<LockOpen />} disabled={open.isPending || !warehouseId}
+              <Button variant="contained" startIcon={<LockOpen />} disabled={open.isPending || !storeId}
                 onClick={() => open.mutate({
                   initialAmount: initial === '' ? 0 : initial,
                   initialAmountUSD: initialUsd === '' ? undefined : initialUsd,
-                  warehouseId,
+                  warehouseId: storeId!,
                 })}>Abrir caja</Button>
             </Stack>
           </CardContent>
