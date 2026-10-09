@@ -79,7 +79,10 @@ namespace BusinessSearcher.Infrastructure.Services
                 var auth = await AuthorizeAsync(cancellationToken);
 
                 using var uploadUrlReq = new HttpRequestMessage(HttpMethod.Post, $"{auth.ApiUrl}/b2api/v3/b2_get_upload_url");
-                uploadUrlReq.Headers.Authorization = new AuthenticationHeaderValue(auth.AuthorizationToken);
+                // Los tokens de B2 pueden traer caracteres (p.ej. '=' de relleno base64) que no son
+                // válidos como "scheme" HTTP estricto para AuthenticationHeaderValue: se agrega la
+                // cabecera cruda sin esa validación.
+                uploadUrlReq.Headers.TryAddWithoutValidation("Authorization", auth.AuthorizationToken);
                 uploadUrlReq.Content = JsonContent(new { bucketId = _bucketId });
                 using var uploadUrlRes = await _http.SendAsync(uploadUrlReq, cancellationToken);
                 var uploadUrlBody = await uploadUrlRes.Content.ReadAsStringAsync(cancellationToken);
@@ -91,7 +94,7 @@ namespace BusinessSearcher.Infrastructure.Services
                 var uploadAuthToken = uploadUrlDoc.RootElement.GetProperty("authorizationToken").GetString()!;
 
                 using var uploadReq = new HttpRequestMessage(HttpMethod.Post, uploadUrl);
-                uploadReq.Headers.Authorization = new AuthenticationHeaderValue(uploadAuthToken);
+                uploadReq.Headers.TryAddWithoutValidation("Authorization", uploadAuthToken);
                 uploadReq.Headers.Add("X-Bz-File-Name", Uri.EscapeDataString(key));
                 uploadReq.Headers.Add("X-Bz-Content-Sha1", sha1Hex);
                 var content = new ByteArrayContent(bytes);
@@ -127,7 +130,7 @@ namespace BusinessSearcher.Infrastructure.Services
 
                 // b2_delete_file_version exige el fileId: se busca por nombre exacto primero.
                 using var listReq = new HttpRequestMessage(HttpMethod.Post, $"{auth.ApiUrl}/b2api/v3/b2_list_file_names");
-                listReq.Headers.Authorization = new AuthenticationHeaderValue(auth.AuthorizationToken);
+                listReq.Headers.TryAddWithoutValidation("Authorization", auth.AuthorizationToken);
                 listReq.Content = JsonContent(new { bucketId = _bucketId, startFileName = key, maxFileCount = 1 });
                 using var listRes = await _http.SendAsync(listReq, cancellationToken);
                 var listBody = await listRes.Content.ReadAsStringAsync(cancellationToken);
@@ -141,7 +144,7 @@ namespace BusinessSearcher.Infrastructure.Services
                 var fileId = first.GetProperty("fileId").GetString();
 
                 using var delReq = new HttpRequestMessage(HttpMethod.Post, $"{auth.ApiUrl}/b2api/v3/b2_delete_file_version");
-                delReq.Headers.Authorization = new AuthenticationHeaderValue(auth.AuthorizationToken);
+                delReq.Headers.TryAddWithoutValidation("Authorization", auth.AuthorizationToken);
                 delReq.Content = JsonContent(new { fileName = key, fileId });
                 using var delRes = await _http.SendAsync(delReq, cancellationToken);
                 if (!delRes.IsSuccessStatusCode)
