@@ -1,5 +1,6 @@
 using BusinessSearcher.API.Common.Authorization;
 using BusinessSearcher.API.Controllers;
+using BusinessSearcher.Application.Commons.Interfaces;
 using BusinessSearcher.Application.DTOs.Operations;
 using BusinessSearcher.Application.Features.Operations.CashRegisters;
 using BusinessSearcher.Application.Features.Operations.Sales;
@@ -15,6 +16,9 @@ namespace BusinessSearcher.API.Controllers.v1
     [Route("api/v1/ops/sales")]
     public class OpsSalesController : BaseApiController
     {
+        private readonly IOperationsReportExporter _exporter;
+        public OpsSalesController(IOperationsReportExporter exporter) => _exporter = exporter;
+
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] DateTime? from, [FromQuery] DateTime? to,
             [FromQuery] Guid? registerId, [FromQuery] Guid? cashierId, [FromQuery] Guid? warehouseId, CancellationToken ct)
@@ -23,6 +27,18 @@ namespace BusinessSearcher.API.Controllers.v1
         [HttpGet("{id:guid}")]
         public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
             => Ok(await Mediator.Send(new GetSaleByIdQuery(id), ct));
+
+        /// <summary>
+        /// Orden de entrega (.xlsx) de una o varias ventas seleccionadas: junta sus renglones en
+        /// un solo documento descargable, con el formato de referencia del negocio.
+        /// </summary>
+        [HttpPost("orden-entrega")]
+        public async Task<IActionResult> OrdenEntrega([FromBody] GenerateOrdenEntregaDto dto, CancellationToken ct)
+        {
+            var orden = await Mediator.Send(new GenerateOrdenEntregaQuery(dto), ct);
+            var bytes = _exporter.ExportOrdenEntrega(orden);
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "orden-de-entrega.xlsx");
+        }
 
         [HttpPost]
         [OpsRoles(OperationsRole.Cajero, OperationsRole.JefeDeTurno)]

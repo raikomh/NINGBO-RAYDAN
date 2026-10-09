@@ -134,6 +134,7 @@ namespace BusinessSearcher.Application.Commons.Interfaces
         byte[] ExportSales(SalesReportDto report);
         byte[] ExportInventory(InventoryReportDto report);
         byte[] ExportExpenses(ExpensesReportDto report);
+        byte[] ExportOrdenEntrega(OrdenEntregaDto orden);
     }
 
     public sealed record CatalogRowDto(int RowNumber, string ProductName, int Quantity, decimal Price, int MinOrderQuantity);

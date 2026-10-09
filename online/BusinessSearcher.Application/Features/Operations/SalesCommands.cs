@@ -260,6 +260,59 @@ namespace BusinessSearcher.Application.Features.Operations.Sales
         }
     }
 
+    /// <summary>
+    /// Arma una orden de entrega (modelo .xlsx del negocio) a partir de una o varias ventas ya
+    /// registradas: junta todos sus renglones en una sola lista (numerada), suma el subtotal, y
+    /// añade el costo de domicilio y los datos de cliente que indique quien la genera (no se
+    /// guardan en la venta, solo viven en este documento).
+    /// </summary>
+    public record GenerateOrdenEntregaQuery(GenerateOrdenEntregaDto Dto) : IRequest<OrdenEntregaDto>;
+
+    public class GenerateOrdenEntregaHandler : IRequestHandler<GenerateOrdenEntregaQuery, OrdenEntregaDto>
+    {
+        private readonly ISaleRepository _sales; private readonly IProductRepository _products;
+        private readonly IBusinessInfoRepository _business; private readonly ICurrentUserService _u;
+        public GenerateOrdenEntregaHandler(ISaleRepository sales, IProductRepository products,
+            IBusinessInfoRepository business, ICurrentUserService u)
+        { _sales = sales; _products = products; _business = business; _u = u; }
+
+        public async Task<OrdenEntregaDto> Handle(GenerateOrdenEntregaQuery r, CancellationToken ct)
+        {
+            var t = OpsMapper.RequireTenant(_u); var d = r.Dto;
+            if (d.SaleIds is null || d.SaleIds.Count == 0)
+                throw new DomainException("Selecciona al menos una venta.");
+
+            var items = new List<OrdenEntregaItemDto>();
+            var codeByProduct = new Dictionary<Guid, string?>();
+            string? currency = null;
+            foreach (var saleId in d.SaleIds.Distinct())
+            {
+                var sale = await _sales.GetByIdAsync(t, saleId, ct)
+                    ?? throw new DomainException($"Venta {saleId} no encontrada.");
+                currency ??= sale.PaymentCurrency.ToString();
+                foreach (var it in sale.Items)
+                {
+                    if (!codeByProduct.TryGetValue(it.ProductId, out var code))
+                    {
+                        var p = await _products.GetByIdAsync(t, it.ProductId, ct);
+                        code = p?.Barcode;
+                        codeByProduct[it.ProductId] = code;
+                    }
+                    items.Add(new OrdenEntregaItemDto(code, it.ProductName, it.Quantity, it.UnitPrice, it.LineTotal));
+                }
+            }
+
+            var subtotal = items.Sum(i => i.Importe);
+            var domicilio = d.Domicilio ?? 0;
+            var business = await _business.GetByTenantAsync(t, ct);
+
+            return new OrdenEntregaDto(
+                business?.Name, DateTime.UtcNow.ToString("yyyyMMddHHmmss"), DateTime.UtcNow,
+                d.Cliente, d.Ci, d.Telefono, d.Direccion, items, subtotal, domicilio, subtotal + domicilio,
+                currency ?? "CUP");
+        }
+    }
+
     public class GetSaleByIdHandler : IRequestHandler<GetSaleByIdQuery, SaleDto>
     {
         private readonly ISaleRepository _repo; private readonly IOperationsUserRepository _users; private readonly ICurrentUserService _u;

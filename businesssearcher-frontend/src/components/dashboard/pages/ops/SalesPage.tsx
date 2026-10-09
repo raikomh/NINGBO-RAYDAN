@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Card, CardContent, Typography, TextField, Chip, CircularProgress,
+  Box, Card, CardContent, Typography, TextField, Chip, CircularProgress, Checkbox,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Tooltip, Paper,
-  Dialog, DialogTitle, DialogContent, DialogActions, Button, Alert, Divider,
+  Dialog, DialogTitle, DialogContent, DialogActions, Button, Alert, Divider, Stack,
 } from '@mui/material';
-import { Receipt, Visibility, Undo, Edit, Print, Add, PointOfSale, Download, UploadFile } from '@mui/icons-material';
-import { useOpsSales, useRefundSale, useUpdateSale, useExportSalesReport } from '@/hooks/useOps';
+import { Receipt, Visibility, Undo, Edit, Print, Add, PointOfSale, Download, UploadFile, LocalShipping } from '@mui/icons-material';
+import { useOpsSales, useRefundSale, useUpdateSale, useExportSalesReport, useGenerateOrdenEntrega } from '@/hooks/useOps';
 import { useIsOpsAdmin, useHasOpsRole } from '@/hooks/useOpsRole';
 import { useActiveStore } from '@/context/StoreContext';
 import SaleReceipt from './SaleReceipt';
@@ -24,6 +24,12 @@ export default function SalesPage() {
   const [selected, setSelected] = useState<OpsSale | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const exportReport = useExportSalesReport();
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const [ordenDialog, setOrdenDialog] = useState(false);
+  const toggleChecked = (id: string) =>
+    setCheckedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const allChecked = !!sales?.length && checkedIds.length === sales.length;
+  const toggleAll = () => setCheckedIds(allChecked ? [] : (sales ?? []).map((s) => s.id));
 
   return (
     <Box>
@@ -47,6 +53,14 @@ export default function SalesPage() {
             onClick={() => exportReport.mutate({ from: from || undefined, to: to || undefined })}
           >
             Exportar
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<LocalShipping />}
+            disabled={checkedIds.length === 0}
+            onClick={() => setOrdenDialog(true)}
+          >
+            Orden de entrega{checkedIds.length > 0 ? ` (${checkedIds.length})` : ''}
           </Button>
           <Button
             variant="contained"
@@ -76,6 +90,10 @@ export default function SalesPage() {
           <Table size="small">
             <TableHead>
               <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox size="small" checked={allChecked} indeterminate={checkedIds.length > 0 && !allChecked}
+                    onChange={toggleAll} />
+                </TableCell>
                 <TableCell>Fecha</TableCell><TableCell>Cajero</TableCell><TableCell>Almacén</TableCell>
                 <TableCell>Código del Gestor</TableCell><TableCell align="right">Items</TableCell>
                 <TableCell>Método</TableCell><TableCell align="right">Total</TableCell><TableCell>Estado</TableCell>
@@ -84,7 +102,10 @@ export default function SalesPage() {
             </TableHead>
             <TableBody>
               {(sales ?? []).map((s) => (
-                <TableRow key={s.id} hover>
+                <TableRow key={s.id} hover selected={checkedIds.includes(s.id)}>
+                  <TableCell padding="checkbox">
+                    <Checkbox size="small" checked={checkedIds.includes(s.id)} onChange={() => toggleChecked(s.id)} />
+                  </TableCell>
                   <TableCell>{new Date(s.date).toLocaleString('es-ES')}</TableCell>
                   <TableCell>{s.cashierName ?? '—'}</TableCell>
                   <TableCell>{s.warehouseName ?? '—'}</TableCell>
@@ -104,7 +125,7 @@ export default function SalesPage() {
                 </TableRow>
               ))}
               {(sales ?? []).length === 0 && (
-                <TableRow><TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin ventas registradas</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin ventas registradas</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -113,7 +134,62 @@ export default function SalesPage() {
 
       {selected && <SaleDetailDialog sale={selected} onClose={() => setSelected(null)} />}
       <SalesImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      {ordenDialog && (
+        <OrdenEntregaDialog
+          saleIds={checkedIds}
+          onClose={() => setOrdenDialog(false)}
+          onGenerated={() => { setOrdenDialog(false); setCheckedIds([]); }}
+        />
+      )}
     </Box>
+  );
+}
+
+function OrdenEntregaDialog({ saleIds, onClose, onGenerated }: {
+  saleIds: string[]; onClose: () => void; onGenerated: () => void;
+}) {
+  const generate = useGenerateOrdenEntrega();
+  const [cliente, setCliente] = useState('');
+  const [ci, setCi] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [direccion, setDireccion] = useState('');
+  const [domicilio, setDomicilio] = useState<number | ''>('');
+
+  const submit = () => {
+    generate.mutate({
+      saleIds,
+      cliente: cliente || undefined, ci: ci || undefined, telefono: telefono || undefined,
+      direccion: direccion || undefined, domicilio: domicilio === '' ? undefined : domicilio,
+    }, { onSuccess: onGenerated });
+  };
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Orden de entrega — {saleIds.length} venta{saleIds.length !== 1 ? 's' : ''}</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          Junta los productos de las ventas seleccionadas en un solo documento descargable (.xlsx).
+          Los datos de abajo son opcionales y solo se usan para este documento.
+        </Typography>
+        <Stack spacing={1.5}>
+          <TextField size="small" label="Cliente" value={cliente} onChange={(e) => setCliente(e.target.value)} />
+          <Stack direction="row" spacing={1.5}>
+            <TextField size="small" label="CI" value={ci} onChange={(e) => setCi(e.target.value)} fullWidth />
+            <TextField size="small" label="Teléfono" value={telefono} onChange={(e) => setTelefono(e.target.value)} fullWidth />
+          </Stack>
+          <TextField size="small" label="Dirección" value={direccion} onChange={(e) => setDireccion(e.target.value)} />
+          <TextField size="small" type="number" label="Domicilio (costo de envío)" value={domicilio}
+            onChange={(e) => setDomicilio(e.target.value === '' ? '' : Number(e.target.value))} />
+        </Stack>
+        {generate.isError && <Alert severity="error" sx={{ mt: 2 }}>No se pudo generar la orden de entrega.</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancelar</Button>
+        <Button variant="contained" startIcon={<LocalShipping />} disabled={generate.isPending} onClick={submit}>
+          {generate.isPending ? 'Generando...' : 'Descargar'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 

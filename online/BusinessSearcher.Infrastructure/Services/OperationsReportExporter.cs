@@ -86,6 +86,65 @@ namespace BusinessSearcher.Infrastructure.Services
             return ToBytes(wb);
         }
 
+        public byte[] ExportOrdenEntrega(OrdenEntregaDto orden)
+        {
+            using var wb = new XLWorkbook();
+            var ws = wb.Worksheets.Add("Orden de Entrega");
+
+            ws.Cell(1, 1).Value = "ORDEN DE ENTREGA";
+            ws.Range(1, 1, 1, 6).Merge();
+            ws.Cell(1, 1).Style.Font.Bold = true;
+            ws.Cell(1, 1).Style.Font.FontSize = 16;
+            ws.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+            if (!string.IsNullOrWhiteSpace(orden.BusinessName))
+            {
+                ws.Cell(2, 1).Value = orden.BusinessName;
+                ws.Range(2, 1, 2, 6).Merge();
+                ws.Cell(2, 1).Style.Font.Bold = true;
+                ws.Cell(2, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            }
+
+            ws.Cell(4, 1).Value = $"Cliente: {orden.Cliente}";
+            ws.Cell(4, 5).Value = $"No.Orden: {orden.NoOrden}";
+            ws.Cell(5, 1).Value = $"ID: {orden.Ci}    Telf: {orden.Telefono}";
+            ws.Cell(5, 5).Value = $"Fecha: {orden.Fecha:dd/MM/yyyy}";
+            ws.Cell(6, 1).Value = $"Dirección: {orden.Direccion}";
+
+            const int headerRow = 8;
+            var headers = new[] { "No", "Código", "Producto", "Cantidad", "P. Unitario", "Importe" };
+            for (var i = 0; i < headers.Length; i++) ws.Cell(headerRow, i + 1).Value = headers[i];
+            ws.Row(headerRow).Style.Font.Bold = true;
+
+            var row = headerRow + 1;
+            var no = 1;
+            foreach (var it in orden.Items)
+            {
+                ws.Cell(row, 1).Value = no++;
+                ws.Cell(row, 2).Value = it.Codigo ?? "";
+                ws.Cell(row, 3).Value = it.Producto;
+                ws.Cell(row, 4).Value = it.Cantidad;
+                ws.Cell(row, 5).Value = it.PrecioUnitario;
+                ws.Cell(row, 6).Value = it.Importe;
+                row++;
+            }
+
+            row += 1;
+            ws.Cell(row, 5).Value = "Subtotal"; ws.Cell(row, 6).Value = orden.Subtotal; row++;
+            ws.Cell(row, 5).Value = "Domicilio"; ws.Cell(row, 6).Value = orden.Domicilio; row++;
+            ws.Cell(row, 5).Value = "Importe Total"; ws.Cell(row, 5).Style.Font.Bold = true;
+            ws.Cell(row, 6).Value = orden.ImporteTotal; ws.Cell(row, 6).Style.Font.Bold = true;
+            row += 2;
+
+            ws.Cell(row, 1).Value = "GRACIAS POR ELEGIRNOS";
+            ws.Range(row, 1, row, 6).Merge();
+            ws.Cell(row, 1).Style.Font.Bold = true;
+            ws.Cell(row, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+            ws.Columns().AdjustToContents();
+            return ToBytes(wb);
+        }
+
         private static byte[] ToBytes(XLWorkbook wb)
         {
             using var ms = new MemoryStream();

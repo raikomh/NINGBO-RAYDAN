@@ -604,6 +604,22 @@ const downloadBlob = async (url: string, params: Record<string, unknown> | undef
   document.body.appendChild(a); a.click(); a.remove();
   window.URL.revokeObjectURL(blobUrl);
 };
+const downloadBlobPost = async (url: string, body: unknown, filename: string) => {
+  const res = await api.post(url, body, { responseType: 'blob' });
+  const blobUrl = window.URL.createObjectURL(new Blob([res.data]));
+  const a = document.createElement('a');
+  a.href = blobUrl; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  window.URL.revokeObjectURL(blobUrl);
+};
+
+// ── Orden de entrega (una o varias ventas seleccionadas, descarga .xlsx) ──
+export function useGenerateOrdenEntrega() {
+  return useMutation({
+    mutationFn: (dto: { saleIds: string[]; cliente?: string; ci?: string; telefono?: string; direccion?: string; domicilio?: number }) =>
+      downloadBlobPost('/api/v1/ops/sales/orden-entrega', dto, 'orden-de-entrega.xlsx'),
+  });
+}
 
 export function useMonthlyDashboard(year?: number, warehouseId?: string | null) {
   return useQuery<MonthlyDashboard>({

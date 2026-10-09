@@ -16,6 +16,17 @@ namespace BusinessSearcher.Application.DTOs.Operations
         IReadOnlyList<SaleItemDto> Items, IReadOnlyList<SalePaymentDto> Payments, string? CashierName = null,
         string? ManagerCode = null);
 
+    // ── Orden de entrega (una o varias ventas seleccionadas, para descargar como .xlsx) ──
+    public record GenerateOrdenEntregaDto(
+        IReadOnlyList<Guid> SaleIds, string? Cliente, string? Ci, string? Telefono, string? Direccion, decimal? Domicilio);
+
+    public record OrdenEntregaItemDto(string? Codigo, string Producto, int Cantidad, decimal PrecioUnitario, decimal Importe);
+
+    public record OrdenEntregaDto(
+        string? BusinessName, string NoOrden, DateTime Fecha, string? Cliente, string? Ci, string? Telefono,
+        string? Direccion, IReadOnlyList<OrdenEntregaItemDto> Items, decimal Subtotal, decimal Domicilio,
+        decimal ImporteTotal, string Currency);
+
     // ── Gestores ──
     public record ManagerDto(
         Guid Id, string Code, string Name, string IdNumber, string Municipality, string Province, string Phone, bool IsActive);
