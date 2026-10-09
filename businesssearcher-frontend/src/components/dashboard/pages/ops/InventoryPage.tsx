@@ -6,12 +6,12 @@ import {
   InputAdornment, Tooltip, Stack, Avatar, Snackbar,
 } from '@mui/material';
 import {
-  Add, Edit, Delete, Inventory2, WarehouseOutlined, Category as CategoryIcon,
+  Add, Edit, Delete, Inventory2, Category as CategoryIcon,
   UploadFile, Public, PublicOff, Image as ImageIcon,
 } from '@mui/icons-material';
 import {
   useOpsProducts, useSaveOpsProduct, useDeleteOpsProduct, useAdjustStock,
-  useWarehouses, useSaveWarehouse, useOpsCategories, useSaveOpsCategory,
+  useWarehouses, useOpsCategories, useSaveOpsCategory,
   useSetProductPublicVisibility, useUploadOpsProductImage,
 } from '@/hooks/useOps';
 import type { OpsProduct, CreateOpsProduct } from '@/lib/opsTypes';
@@ -20,10 +20,11 @@ import { useHasOpsRole } from '@/hooks/useOpsRole';
 import { useActiveStore } from '@/context/StoreContext';
 
 export default function InventoryPage() {
+  // Cada operación de Inventario es siempre sobre la tienda activa: no hay selector de almacén
+  // ni vista "todos" aquí (eso quedó resuelto por el selector global de tienda), y tampoco un
+  // CRUD de almacenes suelto en esta página — las tiendas se crean/eligen desde ese selector.
   const { storeId } = useActiveStore();
-  // Arranca en la tienda activa del selector global, pero se puede cambiar solo en esta página
-  // sin afectar la selección global (p.ej. para revisar el stock de otra tienda puntualmente).
-  const [warehouseId, setWarehouseId] = useState<string>(storeId ?? '');
+  const warehouseId = storeId ?? '';
   const [search, setSearch] = useState('');
   const [lowStockOnly, setLowStockOnly] = useState(false);
 
@@ -39,7 +40,6 @@ export default function InventoryPage() {
   const [editProduct, setEditProduct] = useState<OpsProduct | null>(null);
   const [stockDialog, setStockDialog] = useState<OpsProduct | null>(null);
   const [catDialog, setCatDialog] = useState(false);
-  const [whDialog, setWhDialog] = useState(false);
   const [importDialog, setImportDialog] = useState(false);
   const [importNotice, setImportNotice] = useState<{ severity: 'success' | 'warning'; lines: string[] } | null>(null);
 
@@ -59,7 +59,6 @@ export default function InventoryPage() {
       <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2} mb={3}>
         <Typography variant="h5" fontWeight={700}>Inventario</Typography>
         <Stack direction="row" spacing={1.5} flexWrap="wrap">
-          <Button startIcon={<WarehouseOutlined />} variant="outlined" onClick={() => setWhDialog(true)}>Almacenes</Button>
           <Button startIcon={<CategoryIcon />} variant="outlined" onClick={() => setCatDialog(true)}>Categorías</Button>
           {canManageCatalog && (
             <>
@@ -81,11 +80,6 @@ export default function InventoryPage() {
         <CardContent sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
           <TextField size="small" label="Buscar (nombre o código)" value={search}
             onChange={(e) => setSearch(e.target.value)} sx={{ minWidth: 240 }} />
-          <TextField size="small" select label="Almacén" value={warehouseId}
-            onChange={(e) => setWarehouseId(e.target.value)} sx={{ minWidth: 200 }}>
-            <MenuItem value="">Todos (stock total)</MenuItem>
-            {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-          </TextField>
           <FormControlLabel control={<Switch checked={lowStockOnly} onChange={(e) => setLowStockOnly(e.target.checked)} />}
             label="Solo bajo stock" />
         </CardContent>
@@ -183,7 +177,6 @@ export default function InventoryPage() {
         <AdjustStockDialog product={stockDialog} defaultWarehouse={warehouseId} onClose={() => setStockDialog(null)} />
       )}
       {catDialog && <CategoriesDialog onClose={() => setCatDialog(false)} />}
-      {whDialog && <WarehousesDialog onClose={() => setWhDialog(false)} />}
       {importDialog && (
         <ImportProductsDialog
           open
@@ -332,9 +325,10 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
 }
 
 function AdjustStockDialog({ product, defaultWarehouse, onClose }: { product: OpsProduct; defaultWarehouse: string; onClose: () => void }) {
-  const { data: warehouses } = useWarehouses();
+  // Se ajusta siempre el stock de la tienda activa (defaultWarehouse ya viene de ahí): no se
+  // puede elegir otro almacén, cada tienda administra solo su propio stock.
+  const warehouseId = defaultWarehouse;
   const adjust = useAdjustStock();
-  const [warehouseId, setWarehouseId] = useState(defaultWarehouse || warehouses?.[0]?.id || '');
   const [delta, setDelta] = useState<number | ''>('');
   const deltaValue = delta === '' ? 0 : delta;
 
@@ -343,9 +337,6 @@ function AdjustStockDialog({ product, defaultWarehouse, onClose }: { product: Op
       <DialogTitle>Ajustar stock — {product.name}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField size="small" select label="Almacén" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-            {warehouses?.map((w) => <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>)}
-          </TextField>
           <TextField size="small" type="number" label="Cantidad (+ entra, − sale)" value={delta}
             onChange={(e) => setDelta(e.target.value === '' ? '' : Number(e.target.value))}
             InputProps={{ startAdornment: <InputAdornment position="start">Δ</InputAdornment> }} />
@@ -386,34 +377,3 @@ function CategoriesDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function WarehousesDialog({ onClose }: { onClose: () => void }) {
-  const { data: warehouses } = useWarehouses();
-  const save = useSaveWarehouse();
-  const canManageCatalog = useHasOpsRole('Almacenero', 'JefeDeTurno');
-  const [name, setName] = useState('');
-  const [location, setLocation] = useState('');
-  const isDuplicate = (warehouses ?? []).some((w) => w.name.trim().toLowerCase() === name.trim().toLowerCase());
-  const errorMessage = (save.error as { response?: { data?: { message?: string } } })?.response?.data?.message;
-  return (
-    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Almacenes</DialogTitle>
-      <DialogContent>
-        {canManageCatalog && (
-          <Stack spacing={1} sx={{ mt: 1, mb: 2 }}>
-            <TextField size="small" fullWidth label="Nombre" value={name} onChange={(e) => setName(e.target.value)}
-              error={isDuplicate} helperText={isDuplicate ? 'Ya existe un almacén con ese nombre.' : ' '} />
-            <TextField size="small" fullWidth label="Ubicación (opcional)" value={location} onChange={(e) => setLocation(e.target.value)} />
-            <Button variant="contained" disabled={!name.trim() || isDuplicate || save.isPending}
-              onClick={() => save.mutate({ name: name.trim(), location: location || undefined }, { onSuccess: () => { setName(''); setLocation(''); } })}>Añadir</Button>
-            {save.isError && !isDuplicate && <Alert severity="error">{errorMessage || 'No se pudo guardar el almacén.'}</Alert>}
-          </Stack>
-        )}
-        <Stack spacing={0.5}>
-          {warehouses?.map((w) => <Chip key={w.id} label={w.name} sx={{ justifyContent: 'flex-start' }} />)}
-          {(warehouses ?? []).length === 0 && <Typography variant="body2" color="text.secondary">Sin almacenes.</Typography>}
-        </Stack>
-      </DialogContent>
-      <DialogActions><Button onClick={onClose}>Cerrar</Button></DialogActions>
-    </Dialog>
-  );
-}
