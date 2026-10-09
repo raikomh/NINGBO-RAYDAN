@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Box, Card, CardActionArea, CardContent, Typography, CircularProgress } from '@mui/material';
-import { Storefront } from '@mui/icons-material';
+import { Box, Card, CardActionArea, CardContent, Typography, CircularProgress, IconButton } from '@mui/material';
+import { Storefront, ArrowBack } from '@mui/icons-material';
 import { useWarehouses } from '@/hooks/useOps';
 import { useActiveStore } from '@/context/StoreContext';
 import { useAuth } from '@/context/AuthContext';
@@ -16,8 +16,11 @@ export default function StoreSelectPage() {
   const [params] = useSearchParams();
   const next = params.get('next') || '/dashboard';
   const { data: warehouses, isLoading } = useWarehouses();
-  const { setStoreId } = useActiveStore();
+  const { storeId, setStoreId } = useActiveStore();
   const { user } = useAuth();
+  // Si ya había una tienda activa, vinimos aquí a cambiar de tienda (no es la primera vez):
+  // tiene sentido poder arrepentirse y volver sin elegir otra.
+  const canGoBack = storeId != null;
 
   const pick = (id: string) => {
     setStoreId(id);
@@ -50,8 +53,15 @@ export default function StoreSelectPage() {
         justifyContent: 'center',
         p: 3,
         bgcolor: 'background.default',
+        position: 'relative',
       }}
     >
+      {canGoBack && (
+        <IconButton onClick={() => navigate(-1)} sx={{ position: 'absolute', top: 16, left: 16 }}>
+          <ArrowBack />
+        </IconButton>
+      )}
+
       <Typography variant="h4" fontWeight={800} textAlign="center">
         ¿Con cuál tienda vas a trabajar?
       </Typography>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, useLocation, Link as RouterLink } from 'react-router-dom';
+import { Outlet, useLocation, Navigate, Link as RouterLink } from 'react-router-dom';
 import { Box, AppBar, Toolbar, IconButton, Typography, useTheme, useMediaQuery, Breadcrumbs, Alert, Link } from '@mui/material';
 import { Menu as MenuIcon, NavigateNext as NextIcon } from '@mui/icons-material';
 import Sidebar, { DRAWER_WIDTH, DRAWER_COLLAPSED_WIDTH } from './Sidebar';
@@ -7,6 +7,8 @@ import ChatWidget from '@/components/chat/ChatWidget';
 import OpsNotificationsBell from './OpsNotificationsBell';
 import StoreSwitcher from './StoreSwitcher';
 import { useAuth } from '@/context/AuthContext';
+import { useActiveStore } from '@/context/StoreContext';
+import { useWarehouses } from '@/hooks/useOps';
 import { isLocalDeployment } from '@/lib/deployment';
 
 const ROUTE_LABELS: Record<string, string> = {
@@ -31,8 +33,17 @@ export default function DashboardLayout() {
   const { pathname } = useLocation();
   const pageTitle = usePageTitle(pathname);
   const { user } = useAuth();
+  const { storeId } = useActiveStore();
+  const { data: warehouses } = useWarehouses();
 
   const sidebarWidth = collapsed ? DRAWER_COLLAPSED_WIDTH : DRAWER_WIDTH;
+
+  // No existe vista "todas las tiendas": las operaciones y estadísticas son siempre de UNA
+  // tienda. Si hay 2+ tiendas y ninguna activa (recién entró, cambió de tienda y canceló, etc.),
+  // no se puede ver nada de Operaciones hasta elegir una.
+  if (pathname.startsWith('/dashboard/ops') && storeId == null && (warehouses?.length ?? 0) >= 2) {
+    return <Navigate to={`/dashboard/select-store?next=${encodeURIComponent(pathname)}`} replace />;
+  }
 
   // Local y Online: bloqueo total (no solo lectura) cuando venció el mes — coincide con el 402
   // de SubscriptionEnforcementMiddleware (backend), que aplica en ambos modos. No aplica al
