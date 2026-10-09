@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import {
   Add, Edit, Delete, Inventory2, Category as CategoryIcon,
-  UploadFile, Public, PublicOff, Image as ImageIcon,
+  UploadFile, Public, PublicOff, Image as ImageIcon, PictureAsPdf,
 } from '@mui/icons-material';
 import {
   useOpsProducts, useSaveOpsProduct, useDeleteOpsProduct, useAdjustStock,
@@ -16,6 +16,7 @@ import {
 } from '@/hooks/useOps';
 import type { OpsProduct, CreateOpsProduct } from '@/lib/opsTypes';
 import ImportProductsDialog from '@/components/dashboard/dialogs/ImportProductsDialog';
+import ExportInventoryPdfDialog from '@/components/dashboard/dialogs/ExportInventoryPdfDialog';
 import { useHasOpsRole } from '@/hooks/useOpsRole';
 import { useActiveStore } from '@/context/StoreContext';
 
@@ -41,6 +42,7 @@ export default function InventoryPage() {
   const [stockDialog, setStockDialog] = useState<OpsProduct | null>(null);
   const [catDialog, setCatDialog] = useState(false);
   const [importDialog, setImportDialog] = useState(false);
+  const [exportPdfDialog, setExportPdfDialog] = useState(false);
   const [importNotice, setImportNotice] = useState<{ severity: 'success' | 'warning'; lines: string[] } | null>(null);
 
   const del = useDeleteOpsProduct();
@@ -60,6 +62,7 @@ export default function InventoryPage() {
         <Typography variant="h5" fontWeight={700}>Inventario</Typography>
         <Stack direction="row" spacing={1.5} flexWrap="wrap">
           <Button startIcon={<CategoryIcon />} variant="outlined" onClick={() => setCatDialog(true)}>Categorías</Button>
+          <Button startIcon={<PictureAsPdf />} variant="outlined" onClick={() => setExportPdfDialog(true)}>Exportar PDF</Button>
           {canManageCatalog && (
             <>
               <Button startIcon={<UploadFile />} variant="outlined" onClick={() => setImportDialog(true)}>Importar productos</Button>
@@ -167,6 +170,16 @@ export default function InventoryPage() {
         <AdjustStockDialog product={stockDialog} defaultWarehouse={warehouseId} onClose={() => setStockDialog(null)} />
       )}
       {catDialog && <CategoriesDialog onClose={() => setCatDialog(false)} />}
+      {exportPdfDialog && (
+        <ExportInventoryPdfDialog
+          products={products ?? []}
+          categories={categories}
+          catName={catName}
+          stockFor={stockFor}
+          storeName={warehouses?.find((w) => w.id === storeId)?.name}
+          onClose={() => setExportPdfDialog(false)}
+        />
+      )}
       {importDialog && (
         <ImportProductsDialog
           open
