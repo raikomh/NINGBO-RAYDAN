@@ -173,7 +173,7 @@ namespace BusinessSearcher.Infrastructure.Extensions
                 services.AddScoped<IEmailService,        SmtpEmailService>();
 
             // ── File Storage ──────────────────────────────────────────────────────
-            services.AddScoped<IFileStorageService,      CloudinaryFileStorageService>();
+            services.AddScoped<IFileStorageService,      BackblazeB2FileStorageService>();
 
             // ── Excel (import de catálogo mayorista / import de ventas) ───────────
             services.AddScoped<IExcelCatalogParser,      ClosedXmlCatalogParser>();

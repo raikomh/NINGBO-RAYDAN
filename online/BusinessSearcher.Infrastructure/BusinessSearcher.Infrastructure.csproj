@@ -29,7 +29,7 @@
     <!-- Firebase Cloud Messaging -->
     <PackageReference Include="FirebaseAdmin"                                   Version="3.1.0" />
 
-    <!-- Cloudinary (imágenes) -->
+    <!-- Cloudinary (imágenes, sin usar actualmente: se cambió a Backblaze B2) -->
     <PackageReference Include="CloudinaryDotNet"                                Version="1.26.2" />
 
     <!-- Stripe (pagos) -->
