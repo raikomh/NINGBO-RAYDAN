@@ -26,6 +26,25 @@ const COLUMNS: ColumnDef[] = [
 
 const DEFAULT_COLUMNS = ['producto', 'codigo', 'categoria', 'venta', 'stock'];
 
+/** Trae una imagen (vía el proxy del backend) y la convierte a data URL para poder
+ * incrustarla en el PDF con jsPDF. Si falla (sin foto, red, etc.) devuelve null y esa
+ * fila simplemente queda sin imagen — nunca bloquea la generación del PDF. */
+async function toDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 interface Props {
   products: OpsProduct[];
   categories: OpsCategory[] | undefined;
@@ -38,6 +57,7 @@ interface Props {
 export default function ExportInventoryPdfDialog({ products, categories, catName, stockFor, storeName, onClose }: Props) {
   const [categoryId, setCategoryId] = useState('');
   const [selectedCols, setSelectedCols] = useState<string[]>(DEFAULT_COLUMNS);
+  const [generating, setGenerating] = useState(false);
 
   const toggleCol = (key: string) =>
     setSelectedCols((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
@@ -48,28 +68,54 @@ export default function ExportInventoryPdfDialog({ products, categories, catName
   );
 
   const columns = COLUMNS.filter((c) => selectedCols.includes(c.key));
-  const canGenerate = columns.length > 0;
+  const canGenerate = columns.length > 0 && !generating;
 
-  const generate = () => {
-    const doc = new jsPDF();
-    const title = categoryId ? `Inventario — ${catName(categoryId)}` : 'Inventario';
-    doc.setFontSize(14);
-    doc.text(title, 14, 15);
-    if (storeName) {
-      doc.setFontSize(10);
-      doc.setTextColor(120);
-      doc.text(storeName, 14, 21);
-      doc.setTextColor(0);
+  const generate = async () => {
+    setGenerating(true);
+    try {
+      // La foto de cada producto va siempre en el catálogo exportado, sin excepción.
+      const images = await Promise.all(
+        filtered.map((p) => (p.imageUrl ? toDataUrl(p.imageUrl) : Promise.resolve(null))),
+      );
+
+      const doc = new jsPDF();
+      const title = categoryId ? `Inventario — ${catName(categoryId)}` : 'Inventario';
+      doc.setFontSize(14);
+      doc.text(title, 14, 15);
+      if (storeName) {
+        doc.setFontSize(10);
+        doc.setTextColor(120);
+        doc.text(storeName, 14, 21);
+        doc.setTextColor(0);
+      }
+      const PHOTO_SIZE = 16;
+      autoTable(doc, {
+        startY: storeName ? 26 : 22,
+        head: [['Foto', ...columns.map((c) => c.label)]],
+        body: filtered.map((p) => ['', ...columns.map((c) => c.get(p, { catName, stockFor }))]),
+        styles: { fontSize: 9, minCellHeight: PHOTO_SIZE + 4, valign: 'middle' },
+        headStyles: { fillColor: [37, 99, 235] },
+        columnStyles: { 0: { cellWidth: PHOTO_SIZE + 4 } },
+        rowPageBreak: 'avoid',
+        didDrawCell: (data) => {
+          if (data.section !== 'body' || data.column.index !== 0) return;
+          const dataUrl = images[data.row.index];
+          if (!dataUrl) return;
+          const format = dataUrl.slice(dataUrl.indexOf('/') + 1, dataUrl.indexOf(';')).toUpperCase();
+          const x = data.cell.x + (data.cell.width - PHOTO_SIZE) / 2;
+          const y = data.cell.y + (data.cell.height - PHOTO_SIZE) / 2;
+          try {
+            doc.addImage(dataUrl, format, x, y, PHOTO_SIZE, PHOTO_SIZE);
+          } catch {
+            // Formato de imagen no soportado por jsPDF: se omite solo esa foto.
+          }
+        },
+      });
+      doc.save(`inventario${categoryId ? `-${catName(categoryId)}` : ''}.pdf`);
+      onClose();
+    } finally {
+      setGenerating(false);
     }
-    autoTable(doc, {
-      startY: storeName ? 26 : 22,
-      head: [columns.map((c) => c.label)],
-      body: filtered.map((p) => columns.map((c) => c.get(p, { catName, stockFor }))),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [37, 99, 235] },
-    });
-    doc.save(`inventario${categoryId ? `-${catName(categoryId)}` : ''}.pdf`);
-    onClose();
   };
 
   return (
@@ -97,13 +143,14 @@ export default function ExportInventoryPdfDialog({ products, categories, catName
 
           <Typography variant="caption" color="text.secondary">
             {filtered.length} producto{filtered.length !== 1 ? 's' : ''} con los filtros actuales.
+            La foto de cada producto se incluye siempre, además de las columnas elegidas.
           </Typography>
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancelar</Button>
         <Button variant="contained" startIcon={<PictureAsPdf />} disabled={!canGenerate} onClick={generate}>
-          Generar PDF
+          {generating ? 'Generando...' : 'Generar PDF'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -330,8 +330,7 @@ function PaymentDialog({ total, currency, onClose, onConfirm, pending, error, er
   const change = Math.max(0, tenderedValue - total);
 
   // Datos para la Orden de Entrega impresa (no se guardan en el sistema todavía, solo se usan
-  // para generar ese documento al confirmar la venta).
-  const [showDelivery, setShowDelivery] = useState(false);
+  // para generar ese documento al confirmar la venta). Se piden siempre, en toda venta.
   const [cliente, setCliente] = useState('');
   const [ci, setCi] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -362,21 +361,17 @@ function PaymentDialog({ total, currency, onClose, onConfirm, pending, error, er
               </Box>
             </>
           )}
-          <Button size="small" onClick={() => setShowDelivery((v) => !v)} sx={{ alignSelf: 'flex-start' }}>
-            {showDelivery ? 'Ocultar' : 'Agregar'} datos de entrega (opcional)
-          </Button>
-          {showDelivery && (
-            <Stack spacing={1.5}>
-              <TextField size="small" label="Cliente" value={cliente} onChange={(e) => setCliente(e.target.value)} />
-              <Stack direction="row" spacing={1.5}>
-                <TextField size="small" label="CI" value={ci} onChange={(e) => setCi(e.target.value)} fullWidth />
-                <TextField size="small" label="Teléfono" value={telefono} onChange={(e) => setTelefono(e.target.value)} fullWidth />
-              </Stack>
-              <TextField size="small" label="Dirección" value={direccion} onChange={(e) => setDireccion(e.target.value)} />
-              <TextField size="small" type="number" label="Domicilio (costo de envío)" value={domicilio}
-                onChange={(e) => setDomicilio(e.target.value === '' ? '' : Number(e.target.value))} />
+          <Typography variant="body2" fontWeight={600}>Datos de entrega</Typography>
+          <Stack spacing={1.5}>
+            <TextField size="small" label="Cliente" value={cliente} onChange={(e) => setCliente(e.target.value)} />
+            <Stack direction="row" spacing={1.5}>
+              <TextField size="small" label="CI" value={ci} onChange={(e) => setCi(e.target.value)} fullWidth />
+              <TextField size="small" label="Teléfono" value={telefono} onChange={(e) => setTelefono(e.target.value)} fullWidth />
             </Stack>
-          )}
+            <TextField size="small" label="Dirección" value={direccion} onChange={(e) => setDireccion(e.target.value)} />
+            <TextField size="small" type="number" label="Domicilio (costo de envío)" value={domicilio}
+              onChange={(e) => setDomicilio(e.target.value === '' ? '' : Number(e.target.value))} />
+          </Stack>
           {error && <Alert severity="error">{errorMessage || 'No se pudo registrar la venta (¿stock suficiente / caja abierta?).'}</Alert>}
         </Stack>
       </DialogContent>

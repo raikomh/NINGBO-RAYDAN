@@ -113,9 +113,7 @@ export default function InventoryPage() {
                 return (
                   <TableRow key={p.id} hover>
                     <TableCell>
-                      <Avatar src={p.imageUrl} variant="rounded" sx={{ width: 32, height: 32 }}>
-                        <ImageIcon fontSize="small" />
-                      </Avatar>
+                      <ProductImage src={p.imageUrl} size={32} />
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" fontWeight={600}>{p.name}</Typography>
@@ -209,6 +207,34 @@ export default function InventoryPage() {
   );
 }
 
+/** Foto del producto: al tocarla se amplía en un diálogo a tamaño grande. */
+function ProductImage({ src, size }: { src?: string; size: number }) {
+  const [zoomed, setZoomed] = useState(false);
+  return (
+    <>
+      <Avatar
+        src={src}
+        variant="rounded"
+        sx={{ width: size, height: size, cursor: src ? 'zoom-in' : 'default' }}
+        onClick={() => src && setZoomed(true)}
+      >
+        <ImageIcon sx={{ fontSize: size * 0.5 }} />
+      </Avatar>
+      {zoomed && src && (
+        <Dialog open onClose={() => setZoomed(false)} maxWidth="lg">
+          <Box
+            component="img"
+            src={src}
+            alt=""
+            onClick={() => setZoomed(false)}
+            sx={{ maxWidth: '90vw', maxHeight: '90vh', display: 'block', cursor: 'zoom-out' }}
+          />
+        </Dialog>
+      )}
+    </>
+  );
+}
+
 function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClose: () => void }) {
   const { data: categories } = useOpsCategories();
   const { data: warehouses } = useWarehouses();
@@ -272,9 +298,7 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
         <Box display="flex" alignItems="center" gap={2} mb={2} flexWrap="wrap">
           {product && (
             <>
-              <Avatar src={product.imageUrl} variant="rounded" sx={{ width: 56, height: 56 }}>
-                <ImageIcon />
-              </Avatar>
+              <ProductImage src={product.imageUrl} size={120} />
               <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileChange} />
               <Button size="small" variant="outlined" startIcon={<UploadFile />}
                 disabled={uploadImage.isPending} onClick={() => fileInputRef.current?.click()}>
