@@ -11,8 +11,10 @@ namespace BusinessSearcher.Infrastructure.Services
     /// <summary>
     /// Almacenamiento de imágenes en Backblaze B2 usando su API nativa (b2_authorize_account /
     /// b2_get_upload_url / subida con cabeceras X-Bz-*), no la compatible con S3: así no hace
-    /// falta el SDK de AWS, solo HttpClient. El bucket debe estar configurado como "Public" en
-    /// Backblaze (Bucket Settings) para que las URLs devueltas se vean directo en el navegador.
+    /// falta el SDK de AWS, solo HttpClient. El bucket se mantiene <b>privado</b> a propósito (el
+    /// plan gratuito de Backblaze no distingue precio por esto, pero evita exponer el storage
+    /// directo): las imágenes se sirven a través del propio backend (ver <see cref="DownloadAsync"/>
+    /// y FilesController), que sí conoce las credenciales para leer del bucket privado.
     /// </summary>
     public class BackblazeB2FileStorageService : IFileStorageService
     {
@@ -21,6 +23,7 @@ namespace BusinessSearcher.Infrastructure.Services
         private readonly string _applicationKey;
         private readonly string _bucketId;
         private readonly string _bucketName;
+        private readonly string _proxyBaseUrl;
         private readonly ILogger<BackblazeB2FileStorageService> _logger;
 
         private static readonly string[] AllowedImageTypes =
@@ -36,6 +39,7 @@ namespace BusinessSearcher.Infrastructure.Services
             _applicationKey = config["Backblaze:ApplicationKey"] ?? throw new InvalidOperationException("Backblaze:ApplicationKey no configurado.");
             _bucketId       = config["Backblaze:BucketId"]       ?? throw new InvalidOperationException("Backblaze:BucketId no configurado.");
             _bucketName     = config["Backblaze:BucketName"]     ?? throw new InvalidOperationException("Backblaze:BucketName no configurado.");
+            _proxyBaseUrl   = (config["Backblaze:ProxyBaseUrl"]  ?? throw new InvalidOperationException("Backblaze:ProxyBaseUrl no configurado.")).TrimEnd('/');
         }
 
         private record AuthResult(string ApiUrl, string DownloadUrl, string AuthorizationToken);
@@ -106,7 +110,7 @@ namespace BusinessSearcher.Infrastructure.Services
                 if (!uploadRes.IsSuccessStatusCode)
                     throw new InvalidOperationException($"Backblaze: error al subir archivo ({(int)uploadRes.StatusCode}): {uploadBody}");
 
-                var url = $"{auth.DownloadUrl}/file/{_bucketName}/{key}";
+                var url = $"{_proxyBaseUrl}/api/v1/files/{key}";
                 _logger.LogInformation("Imagen subida exitosamente: {Url}", url);
                 return url;
             }
@@ -121,10 +125,10 @@ namespace BusinessSearcher.Infrastructure.Services
         {
             try
             {
-                var marker = $"/file/{_bucketName}/";
+                const string marker = "/api/v1/files/";
                 var idx = fileUrl.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
                 if (idx < 0) return;
-                var key = Uri.UnescapeDataString(fileUrl[(idx + marker.Length)..]);
+                var key = fileUrl[(idx + marker.Length)..];
 
                 var auth = await AuthorizeAsync(cancellationToken);
 
@@ -154,6 +158,25 @@ namespace BusinessSearcher.Infrastructure.Services
             {
                 _logger.LogError(ex, "Error eliminando imagen de Backblaze B2: {Url}", fileUrl);
             }
+        }
+
+        public async Task<(Stream Stream, string ContentType)> DownloadAsync(string key, CancellationToken cancellationToken = default)
+        {
+            var auth = await AuthorizeAsync(cancellationToken);
+
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"{auth.DownloadUrl}/file/{_bucketName}/{key}");
+            req.Headers.TryAddWithoutValidation("Authorization", auth.AuthorizationToken);
+
+            var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if (!res.IsSuccessStatusCode)
+            {
+                res.Dispose();
+                throw new FileNotFoundException($"No se encontró el archivo '{key}' en Backblaze B2.");
+            }
+
+            var contentType = res.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+            var stream = await res.Content.ReadAsStreamAsync(cancellationToken);
+            return (stream, contentType);
         }
 
         public bool IsValidImageContentType(string contentType) =>

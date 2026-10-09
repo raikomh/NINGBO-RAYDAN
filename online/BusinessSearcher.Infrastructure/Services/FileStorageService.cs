@@ -93,5 +93,9 @@ namespace BusinessSearcher.Infrastructure.Services
 
         public bool IsValidImageContentType(string contentType) =>
             AllowedImageTypes.Contains(contentType.ToLowerInvariant());
+
+        // Cloudinary ya devuelve URLs públicas directas (CDN propio): no necesita proxy.
+        public Task<(Stream Stream, string ContentType)> DownloadAsync(string key, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("CloudinaryFileStorageService no implementa DownloadAsync: sus URLs ya son públicas.");
     }
 }

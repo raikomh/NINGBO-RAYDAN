@@ -83,6 +83,12 @@ namespace BusinessSearcher.Application.Commons.Interfaces
         Task<string> UploadAsync(Stream fileStream, string fileName, string contentType, string folder, CancellationToken cancellationToken = default);
         Task DeleteAsync(string fileUrl, CancellationToken cancellationToken = default);
         bool IsValidImageContentType(string contentType);
+        /// <summary>
+        /// Trae los bytes de un archivo ya subido a partir de su key (la parte después de
+        /// "/api/v1/files/" en la URL devuelta por <see cref="UploadAsync"/>). Permite servir
+        /// archivos de un bucket privado a través del propio backend, sin exponerlo públicamente.
+        /// </summary>
+        Task<(Stream Stream, string ContentType)> DownloadAsync(string key, CancellationToken cancellationToken = default);
     }
 
     public interface IDateTimeService
