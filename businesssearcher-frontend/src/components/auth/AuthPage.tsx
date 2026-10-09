@@ -82,7 +82,6 @@ function LoginPanel({ active, onSwitch }: { active: boolean; onSwitch: () => voi
   const [error, setError] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
-  const [employeeMode, setEmployeeMode] = useState(false);
   const [notice, setNotice] = useState('');
 
   // Aviso de un logout forzado por suscripción vencida (ver AuthContext.forceLogoutForExpiredSubscription).
@@ -102,23 +101,32 @@ function LoginPanel({ active, onSwitch }: { active: boolean; onSwitch: () => voi
     setError('');
     setNeedsVerification(false);
     setResendState('idle');
+    // El password no se recorta en el schema (a diferencia del email) para no alterar lo que
+    // el usuario ve mientras escribe; se recorta solo aquí, al enviar, porque un espacio final
+    // invisible (típico de autocompletado/copy-paste) rompe la verificación de hash en silencio
+    // y el usuario ve "Credenciales inválidas" sin entender por qué.
+    const password = data.password.trim();
+
+    // Un solo formulario de login para dueño y empleado: no se le pide al usuario elegir qué es.
+    // Primero se prueba como dueño del negocio; si falla (y no es por email sin verificar, que
+    // sí aplica solo a dueños), se reintenta como empleado del TPV antes de mostrar error.
     try {
-      // El password no se recorta en el schema (a diferencia del email) para no alterar lo que
-      // el usuario ve mientras escribe; se recorta solo aquí, al enviar, porque un espacio final
-      // invisible (típico de autocompletado/copy-paste) rompe la verificación de hash en silencio
-      // y el usuario ve "Credenciales inválidas" sin entender por qué.
-      const password = data.password.trim();
-      if (employeeMode) {
-        await loginOps(data.email, password);
-        navigate('/dashboard/select-store?next=' + encodeURIComponent('/dashboard/ops/pos'));
-      } else {
-        await login(data.email, password);
-        navigate('/dashboard/select-store?next=' + encodeURIComponent('/dashboard'));
+      await login(data.email, password);
+      navigate('/dashboard/select-store?next=' + encodeURIComponent('/dashboard'));
+      return;
+    } catch (ownerErr: unknown) {
+      const ownerMsg = (ownerErr as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      if (ownerMsg?.toLowerCase().includes('verificar')) {
+        setError(ownerMsg);
+        setNeedsVerification(true);
+        return;
       }
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg ?? 'Credenciales incorrectas. Inténtalo de nuevo.');
-      setNeedsVerification(!employeeMode && !!msg && msg.toLowerCase().includes('verificar'));
+    }
+    try {
+      await loginOps(data.email, password);
+      navigate('/dashboard/select-store?next=' + encodeURIComponent('/dashboard/ops/pos'));
+    } catch {
+      setError('Credenciales incorrectas. Inténtalo de nuevo.');
     }
   };
 
@@ -184,19 +192,8 @@ function LoginPanel({ active, onSwitch }: { active: boolean; onSwitch: () => voi
               Bienvenido de vuelta
             </h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm">
-              {employeeMode ? 'Acceso de empleado (Punto de Venta)' : 'Inicia sesión en tu cuenta para continuar'}
+              Inicia sesión en tu cuenta para continuar
             </p>
-          </div>
-
-          <div className="mb-6 inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-1 bg-gray-50 dark:bg-gray-900">
-            <button type="button" onClick={() => { setEmployeeMode(false); setError(''); }}
-              className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${!employeeMode ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
-              Dueño
-            </button>
-            <button type="button" onClick={() => { setEmployeeMode(true); setError(''); }}
-              className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${employeeMode ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
-              Empleado (TPV)
-            </button>
           </div>
 
           {notice && <Alert severity="info" className="mb-4" onClose={() => setNotice('')}>{notice}</Alert>}
