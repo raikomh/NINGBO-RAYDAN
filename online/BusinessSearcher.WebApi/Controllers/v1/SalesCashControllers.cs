@@ -83,8 +83,8 @@ namespace BusinessSearcher.API.Controllers.v1
     public class OpsCashRegistersController : BaseApiController
     {
         [HttpGet("current")]
-        public async Task<IActionResult> Current(CancellationToken ct)
-            => Ok(await Mediator.Send(new GetCurrentCashRegisterQuery(), ct));
+        public async Task<IActionResult> Current([FromQuery] Guid? warehouseId, CancellationToken ct)
+            => Ok(await Mediator.Send(new GetCurrentCashRegisterQuery(warehouseId), ct));
 
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] DateTime? from, [FromQuery] DateTime? to, CancellationToken ct)

@@ -27,7 +27,11 @@ namespace BusinessSearcher.Application.Features.Operations.CashRegisters
     public record OpenCashRegisterCommand(OpenCashRegisterDto Dto) : IRequest<CashRegisterDto>;
     public record CloseCashRegisterCommand(Guid Id, CloseCashRegisterDto Dto) : IRequest<CashRegisterDto>;
     public record CreateCashMovementCommand(CreateCashMovementDto Dto) : IRequest<CashMovementDto>;
-    public record GetCurrentCashRegisterQuery : IRequest<CashRegisterDto?>;
+    /// <summary>La caja "actual" es la de la tienda activa (<paramref name="WarehouseId"/>), no "la que
+    /// tenga abierta este usuario": una misma cuenta (p.ej. Administrador) puede operar varias tiendas y
+    /// cada una tiene su propia caja. Sin WarehouseId cae al comportamiento viejo (por usuario), por
+    /// compatibilidad.</summary>
+    public record GetCurrentCashRegisterQuery(Guid? WarehouseId = null) : IRequest<CashRegisterDto?>;
     public record GetCashRegistersQuery(DateTime? From, DateTime? To) : IRequest<IReadOnlyList<CashRegisterDto>>;
     public record GetCashMovementsQuery(Guid RegisterId) : IRequest<IReadOnlyList<CashMovementDto>>;
 
@@ -38,8 +42,18 @@ namespace BusinessSearcher.Application.Features.Operations.CashRegisters
         public async Task<CashRegisterDto> Handle(OpenCashRegisterCommand r, CancellationToken ct)
         {
             var t = OpsMapper.RequireTenant(_u); var d = r.Dto;
-            var existing = await _repo.GetOpenForUserAsync(t, _u.AccountId, ct);
-            if (existing is not null) throw new DomainException("Ya tienes una caja abierta. Ciérrala antes de abrir otra.");
+            // Una caja por TIENDA, no por usuario: así una misma cuenta (p.ej. Administrador) puede tener
+            // abierta la caja de Nexos y, en otra pestaña/sesión, la de HNC al mismo tiempo.
+            if (d.WarehouseId is Guid warehouseId)
+            {
+                var existingInWarehouse = await _repo.GetOpenByWarehouseAsync(t, warehouseId, ct);
+                if (existingInWarehouse.Count > 0) throw new DomainException("Esta tienda ya tiene una caja abierta. Ciérrala antes de abrir otra.");
+            }
+            else
+            {
+                var existingForUser = await _repo.GetOpenForUserAsync(t, _u.AccountId, ct);
+                if (existingForUser is not null) throw new DomainException("Ya tienes una caja abierta. Ciérrala antes de abrir otra.");
+            }
             var reg = CashRegister.Open(t, _u.AccountId, d.InitialAmount, d.WarehouseId, d.InitialAmountUSD);
             await _repo.AddAsync(reg, ct); await _uow.SaveChangesAsync(ct);
             return CashMapper.ToDto(reg);
@@ -86,7 +100,11 @@ namespace BusinessSearcher.Application.Features.Operations.CashRegisters
         public async Task<CashRegisterDto?> Handle(GetCurrentCashRegisterQuery r, CancellationToken ct)
         {
             var t = OpsMapper.RequireTenant(_u);
-            var reg = await _repo.GetOpenForUserAsync(t, _u.AccountId, ct);
+            CashRegister? reg;
+            if (r.WarehouseId is Guid warehouseId)
+                reg = (await _repo.GetOpenByWarehouseAsync(t, warehouseId, ct)).FirstOrDefault();
+            else
+                reg = await _repo.GetOpenForUserAsync(t, _u.AccountId, ct);
             return reg is null ? null : CashMapper.ToDto(reg);
         }
     }

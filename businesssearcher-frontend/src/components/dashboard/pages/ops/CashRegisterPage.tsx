@@ -19,13 +19,13 @@ import CashDenominationBreakdown from './CashDenominationBreakdown';
 
 export default function CashRegisterPage() {
   const navigate = useNavigate();
-  const { data: register, isLoading } = useCurrentCashRegister();
+  const { storeId } = useActiveStore();
+  const { data: register, isLoading } = useCurrentCashRegister(storeId);
   const { data: warehouses } = useWarehouses();
   const { data: movements } = useCashMovements(register?.id);
   const { data: sales } = useOpsSales(register ? { registerId: register.id } : undefined);
   const { data: business } = useBusinessInfo();
   const { user } = useAuth();
-  const { storeId } = useActiveStore();
   const activeWarehouse = warehouses?.find((w) => w.id === storeId);
 
   const open = useOpenRegister();

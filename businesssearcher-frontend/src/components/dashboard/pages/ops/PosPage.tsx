@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box, Card, CardContent, Typography, TextField, Button, IconButton, Chip,
   List, ListItem, ListItemText, Divider, Stack, Grid, Alert, InputAdornment, ToggleButton,
@@ -22,20 +22,16 @@ interface CartLine {
 
 export default function PosPage() {
   const navigate = useNavigate();
-  const { data: register } = useCurrentCashRegister();
-  const { data: rate } = useExchangeRate();
   const { storeId } = useActiveStore();
-  const [warehouseId, setWarehouseId] = useState('');
+  // La caja que se trae ya es la de la tienda activa (useCurrentCashRegister filtra por
+  // warehouseId), así que nunca hay que resolver "a qué almacén pertenece esta caja": siempre es
+  // storeId. Antes esto se sacaba de register.warehouseId con fallback a storeId, pero esa caja
+  // podía ser la de OTRA tienda (bug: una cuenta con caja abierta en HNC seguía viéndola al
+  // cambiar a Nexos) — con la caja ya filtrada por tienda, ese problema no puede repetirse.
+  const { data: register } = useCurrentCashRegister(storeId);
+  const { data: rate } = useExchangeRate();
   const [search, setSearch] = useState('');
-
-  // Al abrir/cambiar la caja, preselecciona la terminal y el almacén con los que se abrió (si tiene).
-  // Sin esto, "effectiveWarehouse" caía al primer almacén de la lista aunque la caja se hubiera
-  // abierto contra otro: el producto se veía en stock (con el stock de OTRO almacén) pero al
-  // vender, AdjustStock validaba el almacén real y tiraba "Stock insuficiente" — se sentía como
-  // si la caja abierta no dejara vender. Si la caja no tiene almacén propio, cae a la tienda activa
-  // del selector global (si hay una elegida).
-  useEffect(() => { setWarehouseId(register?.warehouseId ?? storeId ?? ''); }, [register?.id, storeId]);
-  const { data: products, isLoading } = useOpsProducts({ search: search || undefined, warehouseId: warehouseId || undefined });
+  const { data: products, isLoading } = useOpsProducts({ search: search || undefined, warehouseId: storeId || undefined });
 
   const [cart, setCart] = useState<CartLine[]>([]);
   // Ventas solo en USD por ahora: se esconde el selector de moneda (CUP queda deshabilitado
@@ -48,9 +44,7 @@ export default function PosPage() {
   const [printTarget, setPrintTarget] = useState<'ticket' | 'orden'>('ticket');
   const createSale = useCreateSale();
 
-  // Nunca cae a "el primer almacén de la lista": si no hay caja/tienda activa, no hay almacén
-  // efectivo — así no se opera por accidente sobre el almacén de otra tienda.
-  const effectiveWarehouse = warehouseId;
+  const effectiveWarehouse = storeId ?? '';
 
   // Precio del punto de venta seleccionado: el propio del almacén si lo tiene, o el general del producto.
   const priceAt = (p: OpsProduct) => {

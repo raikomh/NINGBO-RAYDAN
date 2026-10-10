@@ -296,13 +296,16 @@ export function useImportSales() {
 }
 
 // ── Caja ──
-export function useCurrentCashRegister() {
+/** La caja "actual" es la de la tienda activa: cada almacén tiene su propia caja, así que el
+ * warehouseId es obligatorio para no mezclar la caja de una tienda con la de otra. */
+export function useCurrentCashRegister(warehouseId?: string | null) {
   return useQuery<OpsCashRegister | null>({
-    queryKey: ['ops', 'cash', 'current'],
+    queryKey: ['ops', 'cash', 'current', warehouseId],
     queryFn: async () => {
-      const res = await api.get('/api/v1/ops/cash-registers/current');
+      const res = await api.get('/api/v1/ops/cash-registers/current', { params: { warehouseId } });
       return (res.data?.data ?? null) as OpsCashRegister | null;
     },
+    enabled: !!warehouseId,
   });
 }
 export function useCashRegisters(params?: { from?: string; to?: string }) {
