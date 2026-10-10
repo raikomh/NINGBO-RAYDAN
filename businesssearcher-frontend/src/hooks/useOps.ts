@@ -182,6 +182,17 @@ export function useSetProductPublicVisibility() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'products'] }),
   });
 }
+/** Fija Costo/Venta de un producto SOLO para un almacén (no toca el precio general que usan
+ * las demás tiendas que también tengan ese mismo producto en stock). */
+export function useSetWarehousePrice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, warehouseId, costPrice, costPriceUSD, sellPrice, sellPriceUSD }: {
+      id: string; warehouseId: string; costPrice: number; costPriceUSD?: number; sellPrice: number; sellPriceUSD?: number;
+    }) => api.patch(`/api/v1/ops/products/${id}/warehouse-price`, { costPrice, costPriceUSD, sellPrice, sellPriceUSD }, { params: { warehouseId } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'products'] }),
+  });
+}
 export function useUploadOpsProductImage() {
   const qc = useQueryClient();
   return useMutation({

@@ -30,6 +30,11 @@ namespace BusinessSearcher.Application.DTOs.Operations
 
     public record SetProductPublicVisibilityDto(bool IsPubliclyVisible);
 
+    /// <summary>Costo y precio de venta propios de UN almacén para este producto. Null en un campo = ese
+    /// almacén usa el valor general del producto para esa moneda (fallback), igual que hoy.</summary>
+    public record SetWarehousePriceDto(
+        decimal? CostPrice, decimal? CostPriceUSD, decimal? SellPrice, decimal? SellPriceUSD);
+
     // ── Importación de catálogo desde Excel ──
     /// <summary>Status: "Creado" (producto nuevo), "Sumado" (se sumó stock al que ya había en el almacén),
     /// "Reactivado" (estaba desactivado: vuelve a estar activo y se suma su stock).

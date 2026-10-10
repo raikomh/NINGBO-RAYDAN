@@ -81,6 +81,14 @@ namespace BusinessSearcher.API.Controllers.v1
         public async Task<IActionResult> SetPublicVisibility(Guid id, [FromBody] SetProductPublicVisibilityDto dto, CancellationToken ct)
             => Ok(await Mediator.Send(new SetProductPublicVisibilityCommand(id, dto), ct), "Visibilidad actualizada.");
 
+        /// <summary>Fija el costo y precio de venta de este producto SOLO para un almacén (no afecta a los
+        /// demás almacenes que también lo tengan en stock).</summary>
+        [HttpPatch("{id:guid}/warehouse-price")]
+        [OpsRoles(OperationsRole.Almacenero, OperationsRole.JefeDeTurno)]
+        public async Task<IActionResult> SetWarehousePrice(
+            Guid id, [FromQuery] Guid warehouseId, [FromBody] SetWarehousePriceDto dto, CancellationToken ct)
+            => Ok(await Mediator.Send(new SetProductWarehousePriceCommand(id, warehouseId, dto), ct), "Precio actualizado para esta tienda.");
+
         /// <summary>
         /// Importa el catálogo desde Excel (Código, Producto, Categoría, Cant. disponible, Precio x unidad (USD);
         /// Descripción opcional). Crea categorías y productos nuevos; los códigos existentes no se duplican: su

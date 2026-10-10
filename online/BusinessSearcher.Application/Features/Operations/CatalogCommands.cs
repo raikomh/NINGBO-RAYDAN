@@ -111,6 +111,10 @@ namespace BusinessSearcher.Application.Features.Operations.Products
     public record DeleteProductCommand(Guid Id) : IRequest;
     public record AdjustProductStockCommand(Guid Id, AdjustStockDto Dto) : IRequest<ProductDto>;
     public record SetProductPublicVisibilityCommand(Guid Id, SetProductPublicVisibilityDto Dto) : IRequest<ProductDto>;
+    /// <summary>Fija el precio de venta propio de UN almacén para este producto, sin tocar el precio general
+    /// (el que usan los demás almacenes). Es la forma correcta de tener precios distintos por tienda para el
+    /// mismo producto, en vez de editar Product.SellPrice/SellPriceUSD (esos son globales a todas las tiendas).</summary>
+    public record SetProductWarehousePriceCommand(Guid Id, Guid WarehouseId, SetWarehousePriceDto Dto) : IRequest<ProductDto>;
     public record GetProductsQuery(string? Search, Guid? CategoryId, Guid? WarehouseId, bool? LowStockOnly) : IRequest<IReadOnlyList<ProductDto>>;
     public record GetProductByIdQuery(Guid Id) : IRequest<ProductDto>;
     public record GetProductByBarcodeQuery(string Barcode) : IRequest<ProductDto?>;
@@ -199,6 +203,21 @@ namespace BusinessSearcher.Application.Features.Operations.Products
             var t = OpsMapper.RequireTenant(_u);
             var p = await _repo.GetByIdAsync(t, r.Id, ct) ?? throw new DomainException("Producto no encontrado.");
             p.SetPublicVisibility(r.Dto.IsPubliclyVisible);
+            await _repo.UpdateAsync(p, ct); await _uow.SaveChangesAsync(ct);
+            return CatalogMapper.ToDto(p);
+        }
+    }
+
+    public class SetProductWarehousePriceHandler : IRequestHandler<SetProductWarehousePriceCommand, ProductDto>
+    {
+        private readonly IProductRepository _repo; private readonly IOperationsUnitOfWork _uow; private readonly ICurrentUserService _u;
+        public SetProductWarehousePriceHandler(IProductRepository repo, IOperationsUnitOfWork uow, ICurrentUserService u) { _repo = repo; _uow = uow; _u = u; }
+        public async Task<ProductDto> Handle(SetProductWarehousePriceCommand r, CancellationToken ct)
+        {
+            var t = OpsMapper.RequireTenant(_u); var d = r.Dto;
+            var p = await _repo.GetByIdAsync(t, r.Id, ct) ?? throw new DomainException("Producto no encontrado.");
+            p.SetPriceForWarehouse(r.WarehouseId, d.SellPrice, d.SellPriceUSD);
+            p.StockFor(r.WarehouseId).SetAverageCost(d.CostPrice, d.CostPriceUSD);
             await _repo.UpdateAsync(p, ct); await _uow.SaveChangesAsync(ct);
             return CatalogMapper.ToDto(p);
         }
