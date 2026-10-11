@@ -51,6 +51,7 @@ export default function SettingsPage() {
       <StoreProfileCard />
       <RoleSalaryCard />
       <MinimoExentoCard />
+      <EurUsdRateCard />
       <TimezoneCard />
       {isPlatformAdmin && <SettingsKeyValueCard />}
 
@@ -370,6 +371,56 @@ function MinimoExentoCard() {
             <TextField size="small" type="number" label="Mínimo exento (CUP)" value={value}
               onChange={(e) => setValue(e.target.value)} sx={{ minWidth: 220 }} />
             <Button variant="contained" disabled={value === '' || Number(value) < 0 || save.isPending} onClick={submit}>
+              Guardar
+            </Button>
+          </Stack>
+        )}
+        {save.isError && <Alert severity="error" sx={{ mt: 2 }}>No se pudo guardar (solo el Administrador puede hacerlo).</Alert>}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** El Costo de los productos se carga en Euros (de las facturas CIF Mariel). Esta tasa es la que
+ * convierte ese Costo en Euros a Costo en USD para mostrarlo en Inventario. */
+export const EUR_USD_RATE_KEY = 'EurUsdRate';
+export const DEFAULT_EUR_USD_RATE = 1.18;
+
+function EurUsdRateCard() {
+  const { data: settings, isLoading } = useSettings();
+  const save = useSaveSetting();
+  const current = settings?.find((s) => s.key === EUR_USD_RATE_KEY);
+  const [value, setValue] = useState('');
+
+  useEffect(() => { if (current) setValue(current.value); }, [current]);
+
+  const submit = () => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return;
+    save.mutate({ key: EUR_USD_RATE_KEY, value: String(n) });
+  };
+
+  return (
+    <Card variant="outlined" sx={{ mb: 2 }}>
+      <CardContent>
+        <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+          <CurrencyExchange fontSize="small" color="primary" />
+          <Typography variant="h6" fontWeight={700}>Tasa Euro → USD (Costo)</Typography>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" display="block" mb={2}>
+          El Costo de los productos se carga en Euros (de las facturas de los proveedores). Esta tasa es
+          la que Inventario usa para calcular el Costo en USD a partir del Costo en Euros. Solo el
+          Administrador puede cambiarla.
+        </Typography>
+
+        {isLoading ? (
+          <Box display="flex" justifyContent="center" py={3}><CircularProgress /></Box>
+        ) : (
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+            <Chip color="primary" label={`1 EUR = ${(Number(current?.value) || DEFAULT_EUR_USD_RATE).toFixed(4)} USD`} />
+            <TextField size="small" type="number" label="Nueva tasa (USD por EUR)" value={value}
+              onChange={(e) => setValue(e.target.value)} sx={{ minWidth: 220 }} />
+            <Button variant="contained" disabled={!value || Number(value) <= 0 || save.isPending} onClick={submit}>
               Guardar
             </Button>
           </Stack>

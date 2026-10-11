@@ -8,18 +8,27 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { OpsProduct, OpsCategory } from '@/lib/opsTypes';
 
+interface ColumnCtx {
+  catName: (id?: string) => string;
+  stockFor: (p: OpsProduct) => number;
+  costUsdFor: (p: OpsProduct) => number | undefined;
+  sellUsdFor: (p: OpsProduct) => number | undefined;
+  eurUsdRate: number;
+}
+
 interface ColumnDef {
   key: string;
   label: string;
-  get: (p: OpsProduct, ctx: { catName: (id?: string) => string; stockFor: (p: OpsProduct) => number }) => string;
+  get: (p: OpsProduct, ctx: ColumnCtx) => string;
 }
 
 const COLUMNS: ColumnDef[] = [
   { key: 'producto', label: 'Producto', get: (p) => p.name },
   { key: 'codigo', label: 'Código', get: (p) => p.barcode ?? '—' },
   { key: 'categoria', label: 'Categoría', get: (p, ctx) => ctx.catName(p.categoryId) },
-  { key: 'costo', label: 'Costo', get: (p) => (p.costPriceUSD != null ? `$${p.costPriceUSD.toFixed(2)}` : '—') },
-  { key: 'venta', label: 'Precio de venta', get: (p) => (p.sellPriceUSD != null ? `$${p.sellPriceUSD.toFixed(2)}` : '—') },
+  { key: 'costeEur', label: 'Coste (EUR)', get: (p, ctx) => { const v = ctx.costUsdFor(p); return v != null ? `€${v.toFixed(2)}` : '—'; } },
+  { key: 'costeUsd', label: 'Coste (USD)', get: (p, ctx) => { const v = ctx.costUsdFor(p); return v != null ? `$${(v * ctx.eurUsdRate).toFixed(2)}` : '—'; } },
+  { key: 'venta', label: 'Precio de venta', get: (p, ctx) => { const v = ctx.sellUsdFor(p); return v != null ? `$${v.toFixed(2)}` : '—'; } },
   { key: 'stock', label: 'Stock', get: (p, ctx) => String(ctx.stockFor(p)) },
   { key: 'minimo', label: 'Stock mínimo', get: (p) => String(p.minStock) },
 ];
@@ -50,11 +59,16 @@ interface Props {
   categories: OpsCategory[] | undefined;
   catName: (id?: string) => string;
   stockFor: (p: OpsProduct) => number;
+  costUsdFor: (p: OpsProduct) => number | undefined;
+  sellUsdFor: (p: OpsProduct) => number | undefined;
+  eurUsdRate: number;
   storeName?: string;
   onClose: () => void;
 }
 
-export default function ExportInventoryPdfDialog({ products, categories, catName, stockFor, storeName, onClose }: Props) {
+export default function ExportInventoryPdfDialog({
+  products, categories, catName, stockFor, costUsdFor, sellUsdFor, eurUsdRate, storeName, onClose,
+}: Props) {
   const [categoryId, setCategoryId] = useState('');
   const [selectedCols, setSelectedCols] = useState<string[]>(DEFAULT_COLUMNS);
   const [generating, setGenerating] = useState(false);
@@ -92,7 +106,7 @@ export default function ExportInventoryPdfDialog({ products, categories, catName
       autoTable(doc, {
         startY: storeName ? 26 : 22,
         head: [['Foto', ...columns.map((c) => c.label)]],
-        body: filtered.map((p) => ['', ...columns.map((c) => c.get(p, { catName, stockFor }))]),
+        body: filtered.map((p) => ['', ...columns.map((c) => c.get(p, { catName, stockFor, costUsdFor, sellUsdFor, eurUsdRate }))]),
         styles: { fontSize: 9, minCellHeight: PHOTO_SIZE + 4, valign: 'middle' },
         headStyles: { fillColor: [37, 99, 235] },
         columnStyles: { 0: { cellWidth: PHOTO_SIZE + 4 } },

@@ -13,12 +13,14 @@ import {
   useOpsProducts, useSaveOpsProduct, useDeleteOpsProduct, useAdjustStock,
   useWarehouses, useOpsCategories, useSaveOpsCategory,
   useSetProductPublicVisibility, useUploadOpsProductImage, useExchangeRate, useSetWarehousePrice,
+  useSettings,
 } from '@/hooks/useOps';
 import type { OpsProduct, CreateOpsProduct } from '@/lib/opsTypes';
 import ImportProductsDialog from '@/components/dashboard/dialogs/ImportProductsDialog';
 import ExportInventoryPdfDialog from '@/components/dashboard/dialogs/ExportInventoryPdfDialog';
 import { useHasOpsRole } from '@/hooks/useOpsRole';
 import { useActiveStore } from '@/context/StoreContext';
+import { EUR_USD_RATE_KEY, DEFAULT_EUR_USD_RATE } from './SettingsPage';
 
 export default function InventoryPage() {
   // Cada operación de Inventario es siempre sobre la tienda activa: no hay selector de almacén
@@ -31,6 +33,8 @@ export default function InventoryPage() {
 
   const { data: warehouses } = useWarehouses();
   const { data: categories } = useOpsCategories();
+  const { data: settings } = useSettings();
+  const eurUsdRate = Number(settings?.find((s) => s.key === EUR_USD_RATE_KEY)?.value) || DEFAULT_EUR_USD_RATE;
   const { data: products, isLoading } = useOpsProducts({
     search: search || undefined,
     warehouseId: warehouseId || undefined,
@@ -105,7 +109,8 @@ export default function InventoryPage() {
                 <TableCell>Producto</TableCell>
                 <TableCell>Código</TableCell>
                 <TableCell>Categoría</TableCell>
-                <TableCell align="right">Costo</TableCell>
+                <TableCell align="right">Coste (EUR)</TableCell>
+                <TableCell align="right">Coste (USD)</TableCell>
                 <TableCell align="right">Venta</TableCell>
                 <TableCell align="right">Stock</TableCell>
                 <TableCell align="center">En la app</TableCell>
@@ -127,7 +132,8 @@ export default function InventoryPage() {
                     </TableCell>
                     <TableCell>{p.barcode ?? '—'}</TableCell>
                     <TableCell>{catName(p.categoryId)}</TableCell>
-                    <TableCell align="right">{costUsdFor(p) != null ? `$${costUsdFor(p)!.toFixed(2)}` : '—'}</TableCell>
+                    <TableCell align="right">{costUsdFor(p) != null ? `€${costUsdFor(p)!.toFixed(2)}` : '—'}</TableCell>
+                    <TableCell align="right">{costUsdFor(p) != null ? `$${(costUsdFor(p)! * eurUsdRate).toFixed(2)}` : '—'}</TableCell>
                     <TableCell align="right">{sellUsdFor(p) != null ? `$${sellUsdFor(p)!.toFixed(2)}` : '—'}</TableCell>
                     <TableCell align="right">
                       <Chip size="small" color={low ? 'warning' : 'default'} label={st}
@@ -180,6 +186,9 @@ export default function InventoryPage() {
           categories={categories}
           catName={catName}
           stockFor={stockFor}
+          costUsdFor={costUsdFor}
+          sellUsdFor={sellUsdFor}
+          eurUsdRate={eurUsdRate}
           storeName={warehouses?.find((w) => w.id === storeId)?.name}
           onClose={() => setExportPdfDialog(false)}
         />
@@ -257,6 +266,8 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
   const { data: categories } = useOpsCategories();
   const { data: warehouses } = useWarehouses();
   const { data: rate } = useExchangeRate();
+  const { data: settings } = useSettings();
+  const eurUsdRate = Number(settings?.find((s) => s.key === EUR_USD_RATE_KEY)?.value) || DEFAULT_EUR_USD_RATE;
   const save = useSaveOpsProduct();
   const setVisibility = useSetProductPublicVisibility();
   const uploadImage = useUploadOpsProductImage();
@@ -383,10 +394,16 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
           </Grid>
           <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Stock mínimo" value={form.minStock || ''} onChange={(e) => set('minStock', e.target.value === '' ? 0 : Number(e.target.value))} /></Grid>
 
-          <Grid item xs={6} sm={6}>
-            <TextField fullWidth size="small" type="number" label={product ? `Costo (${activeWarehouse?.name ?? 'esta tienda'})` : 'Costo'}
+          <Grid item xs={6} sm={4}>
+            <TextField fullWidth size="small" type="number" label={product ? `Coste en Euros (${activeWarehouse?.name ?? 'esta tienda'})` : 'Coste en Euros'}
               value={form.costPriceUSD ?? ''} onChange={(e) => set('costPriceUSD', num(e.target.value))}
-              InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
+              InputProps={{ startAdornment: <InputAdornment position="start">€</InputAdornment> }} />
+          </Grid>
+          <Grid item xs={6} sm={2}>
+            <TextField fullWidth size="small" disabled label="Coste en USD"
+              value={form.costPriceUSD != null ? (form.costPriceUSD * eurUsdRate).toFixed(2) : ''}
+              InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
+              helperText={`tasa 1€ = $${eurUsdRate}`} />
           </Grid>
           <Grid item xs={6} sm={6}>
             <TextField fullWidth size="small" type="number" label={product ? `Venta (${activeWarehouse?.name ?? 'esta tienda'})` : 'Precio de venta'}
