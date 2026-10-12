@@ -9,6 +9,9 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Repositories
             Guid? registerId, Guid? cashierId, Guid? warehouseId = null, CancellationToken ct = default);
         Task AddAsync(Sale sale, CancellationToken ct = default);
         Task UpdateAsync(Sale sale, CancellationToken ct = default);
+        /// <summary>Borra para siempre las ventas con algún renglón en ese almacén (y sus items/pagos, en
+        /// cascada). Devuelve cuántas ventas borró. Operación destructiva — no hay forma de recuperarlas.</summary>
+        Task<int> DeleteByWarehouseAsync(Guid tenantId, Guid warehouseId, CancellationToken ct = default);
     }
 
     public interface ICashRegisterRepository

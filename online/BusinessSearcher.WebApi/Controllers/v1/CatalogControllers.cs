@@ -90,6 +90,20 @@ namespace BusinessSearcher.API.Controllers.v1
             => Ok(await Mediator.Send(new SetProductWarehousePriceCommand(id, warehouseId, dto), ct), "Precio actualizado para esta tienda.");
 
         /// <summary>
+        /// Vacía el catálogo de UNA tienda: los productos compartidos con otra tienda solo pierden su
+        /// stock/precio en esta (siguen existiendo en las demás); los exclusivos de esta tienda se borran
+        /// para siempre. Según las banderas, también borra historial de precios, movimientos de inventario
+        /// y/o ventas de esta tienda. Operación destructiva e irreversible — solo Administrador.
+        /// </summary>
+        [HttpPost("clear-warehouse/{warehouseId:guid}")]
+        [OpsRoles]
+        public async Task<IActionResult> ClearWarehouse(
+            Guid warehouseId, [FromBody] ClearWarehouseProductsDto dto, CancellationToken ct)
+            => Ok(await Mediator.Send(new ClearWarehouseProductsCommand(
+                warehouseId, dto.DeletePriceHistory, dto.DeleteInventoryMovements, dto.DeleteSalesHistory), ct),
+                "Catálogo de la tienda vaciado.");
+
+        /// <summary>
         /// Importa el catálogo desde Excel (Código, Producto, Categoría, Cant. disponible, Precio x unidad (USD);
         /// Descripción opcional). Crea categorías y productos nuevos; los códigos existentes no se duplican: su
         /// stock en el almacén indicado se ajusta al valor del archivo. Todo-o-nada ante errores de archivo.

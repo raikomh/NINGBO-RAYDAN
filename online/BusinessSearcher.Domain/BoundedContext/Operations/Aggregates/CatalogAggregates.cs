@@ -153,6 +153,17 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
             SetUpdated();
         }
 
+        /// <summary>Quita el stock/precio propio de un almacén (lo "desvincula" de ese almacén) sin tocar el
+        /// producto en los demás. Se usa al vaciar el catálogo de UNA tienda cuando el producto es
+        /// compartido con otras — si no es compartido, el llamador debe borrar el producto entero en vez
+        /// de llamar aquí.</summary>
+        public void RemoveStockForWarehouse(Guid warehouseId)
+        {
+            var s = _stocks.FirstOrDefault(x => x.WarehouseId == warehouseId);
+            if (s is not null) _stocks.Remove(s);
+            SetUpdated();
+        }
+
         /// <summary>Ajusta (suma o resta) el stock en un almacén. Lanza si el resultado sería negativo.</summary>
         public void AdjustStock(Guid warehouseId, int delta)
         {

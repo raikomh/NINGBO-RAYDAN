@@ -24,6 +24,8 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Repositories
         Task<IReadOnlyList<InventoryMovement>> GetByTenantAsync(Guid tenantId, DateTime? from, DateTime? to,
             Guid? productId, Guid? warehouseId, CancellationToken ct = default);
         Task AddAsync(InventoryMovement movement, CancellationToken ct = default);
+        /// <summary>Borra los movimientos donde ese almacén es origen o destino. Devuelve cuántos borró.</summary>
+        Task<int> DeleteByWarehouseAsync(Guid tenantId, Guid warehouseId, CancellationToken ct = default);
     }
 
     public interface IInventoryCountRepository

@@ -56,8 +56,14 @@ namespace BusinessSearcher.Infrastructure.Persistence.Repositories.Operations
             return list;
         }
 
+        public async Task<IReadOnlyList<Product>> GetAllByWarehouseAsync(Guid tenantId, Guid warehouseId, CancellationToken ct = default)
+            => await _db.Products.Include(p => p.Stocks)
+                .Where(p => p.TenantId == tenantId && p.Stocks.Any(s => s.WarehouseId == warehouseId))
+                .ToListAsync(ct);
+
         public async Task AddAsync(Product product, CancellationToken ct = default) => await _db.Products.AddAsync(product, ct);
         public Task UpdateAsync(Product product, CancellationToken ct = default) { _db.Products.Update(product); return Task.CompletedTask; }
+        public Task HardDeleteAsync(Product product, CancellationToken ct = default) { _db.Products.Remove(product); return Task.CompletedTask; }
     }
 
     public class ProductPriceHistoryRepository : IProductPriceHistoryRepository
@@ -76,5 +82,13 @@ namespace BusinessSearcher.Infrastructure.Persistence.Repositories.Operations
                 .OrderByDescending(h => h.ChangeDate).ToListAsync(ct);
 
         public async Task AddAsync(ProductPriceHistory history, CancellationToken ct = default) => await _db.ProductPriceHistory.AddAsync(history, ct);
+
+        public async Task<int> DeleteByProductAsync(Guid tenantId, Guid productId, CancellationToken ct = default)
+        {
+            var rows = await _db.ProductPriceHistory
+                .Where(h => h.TenantId == tenantId && h.ProductId == productId).ToListAsync(ct);
+            _db.ProductPriceHistory.RemoveRange(rows);
+            return rows.Count;
+        }
     }
 }

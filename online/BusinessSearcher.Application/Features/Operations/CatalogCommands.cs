@@ -270,6 +270,74 @@ namespace BusinessSearcher.Application.Features.Operations.Products
         }
     }
 
+    // ── Vaciar el catálogo de UNA tienda (baja masiva + historial) ──
+    /// <param name="WarehouseId">Tienda a vaciar.</param>
+    /// <param name="DeletePriceHistory">Borra el historial de cambios de Costo/Venta de los productos que se
+    /// borran por completo (los compartidos con otra tienda conservan su historial).</param>
+    /// <param name="DeleteInventoryMovements">Borra los movimientos de inventario (entradas, salidas,
+    /// traslados, mermas) donde esta tienda es origen o destino.</param>
+    /// <param name="DeleteSalesHistory">Borra las ventas registradas en esta tienda. Operación financiera
+    /// irreversible — los contadores de caja ya cerrados pueden quedar con totales que ya no cuadran con
+    /// el detalle de ventas.</param>
+    public record ClearWarehouseProductsCommand(
+        Guid WarehouseId, bool DeletePriceHistory, bool DeleteInventoryMovements, bool DeleteSalesHistory)
+        : IRequest<ClearWarehouseProductsResultDto>;
+
+    public class ClearWarehouseProductsHandler : IRequestHandler<ClearWarehouseProductsCommand, ClearWarehouseProductsResultDto>
+    {
+        private readonly IProductRepository _products; private readonly IProductPriceHistoryRepository _priceHistory;
+        private readonly IInventoryMovementRepository _movements; private readonly ISaleRepository _sales;
+        private readonly IWarehouseRepository _warehouses; private readonly IOperationsUnitOfWork _uow;
+        private readonly ICurrentUserService _u;
+
+        public ClearWarehouseProductsHandler(
+            IProductRepository products, IProductPriceHistoryRepository priceHistory,
+            IInventoryMovementRepository movements, ISaleRepository sales, IWarehouseRepository warehouses,
+            IOperationsUnitOfWork uow, ICurrentUserService u)
+        {
+            _products = products; _priceHistory = priceHistory; _movements = movements; _sales = sales;
+            _warehouses = warehouses; _uow = uow; _u = u;
+        }
+
+        public async Task<ClearWarehouseProductsResultDto> Handle(ClearWarehouseProductsCommand r, CancellationToken ct)
+        {
+            var t = OpsMapper.RequireTenant(_u);
+            var warehouse = await _warehouses.GetByIdAsync(t, r.WarehouseId, ct)
+                ?? throw new DomainException("Almacén no encontrado.");
+
+            var products = await _products.GetAllByWarehouseAsync(t, r.WarehouseId, ct);
+
+            var unlinked = 0; var deleted = 0; var priceHistoryDeleted = 0;
+            foreach (var p in products)
+            {
+                var isShared = p.Stocks.Any(s => s.WarehouseId != r.WarehouseId);
+                if (isShared)
+                {
+                    p.RemoveStockForWarehouse(r.WarehouseId);
+                    await _products.UpdateAsync(p, ct);
+                    unlinked++;
+                }
+                else
+                {
+                    if (r.DeletePriceHistory)
+                        priceHistoryDeleted += await _priceHistory.DeleteByProductAsync(t, p.Id, ct);
+                    await _products.HardDeleteAsync(p, ct);
+                    deleted++;
+                }
+            }
+
+            var movementsDeleted = r.DeleteInventoryMovements
+                ? await _movements.DeleteByWarehouseAsync(t, r.WarehouseId, ct) : 0;
+            var salesDeleted = r.DeleteSalesHistory
+                ? await _sales.DeleteByWarehouseAsync(t, r.WarehouseId, ct) : 0;
+
+            await _uow.SaveChangesAsync(ct);
+
+            return new ClearWarehouseProductsResultDto(
+                warehouse.Name, products.Count, unlinked, deleted, priceHistoryDeleted, movementsDeleted, salesDeleted);
+        }
+    }
+
     // ── Subida de foto de producto ──
     public record UploadProductImageCommand(Guid ProductId, IFormFile File) : IRequest<string>;
 

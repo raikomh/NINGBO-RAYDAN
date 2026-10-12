@@ -67,6 +67,15 @@ namespace BusinessSearcher.Infrastructure.Persistence.Repositories.Operations
         }
 
         public async Task AddAsync(InventoryMovement movement, CancellationToken ct = default) => await _db.InventoryMovements.AddAsync(movement, ct);
+
+        public async Task<int> DeleteByWarehouseAsync(Guid tenantId, Guid warehouseId, CancellationToken ct = default)
+        {
+            var rows = await _db.InventoryMovements
+                .Where(m => m.TenantId == tenantId && (m.FromWarehouseId == warehouseId || m.ToWarehouseId == warehouseId))
+                .ToListAsync(ct);
+            _db.InventoryMovements.RemoveRange(rows);
+            return rows.Count;
+        }
     }
 
     public class InventoryCountRepository : IInventoryCountRepository

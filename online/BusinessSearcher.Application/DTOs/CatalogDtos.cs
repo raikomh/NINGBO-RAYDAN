@@ -30,6 +30,12 @@ namespace BusinessSearcher.Application.DTOs.Operations
 
     public record SetProductPublicVisibilityDto(bool IsPubliclyVisible);
 
+    public record ClearWarehouseProductsResultDto(
+        string WarehouseName, int ProductsFound, int ProductsUnlinked, int ProductsDeleted,
+        int PriceHistoryDeleted, int MovementsDeleted, int SalesDeleted);
+
+    public record ClearWarehouseProductsDto(bool DeletePriceHistory, bool DeleteInventoryMovements, bool DeleteSalesHistory);
+
     /// <summary>Costo y precio de venta propios de UN almacén para este producto. Null en un campo = ese
     /// almacén usa el valor general del producto para esa moneda (fallback), igual que hoy.</summary>
     public record SetWarehousePriceDto(
