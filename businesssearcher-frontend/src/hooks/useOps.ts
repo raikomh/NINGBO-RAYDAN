@@ -193,6 +193,16 @@ export function useSetWarehousePrice() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'products'] }),
   });
 }
+/** Fija la Provincia de un producto SOLO para un almacén (dato libre por tienda; no toca las
+ * demás tiendas que también tengan ese mismo producto en stock). */
+export function useSetWarehouseProvince() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, warehouseId, province }: { id: string; warehouseId: string; province: string | null }) =>
+      api.patch(`/api/v1/ops/products/${id}/warehouse-province`, { province }, { params: { warehouseId } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ops', 'products'] }),
+  });
+}
 export function useUploadOpsProductImage() {
   const qc = useQueryClient();
   return useMutation({

@@ -5,9 +5,10 @@ namespace BusinessSearcher.Application.DTOs.Operations
     public record CreateCategoryDto(string Name, string? Description = null, string? Code = null);
 
     // ── Existencias por almacén ──
-    /// <summary>SellPrice/SellPriceUSD: precio propio de este almacén (null = usa el precio general del producto).</summary>
+    /// <summary>SellPrice/SellPriceUSD: precio propio de este almacén (null = usa el precio general del producto).
+    /// Province: provincia de este producto en este almacén (dato libre, por tienda; null = sin asignar).</summary>
     public record ProductStockDto(Guid WarehouseId, int Quantity, decimal? AverageCost, decimal? AverageCostUSD,
-        decimal? SellPrice = null, decimal? SellPriceUSD = null);
+        decimal? SellPrice = null, decimal? SellPriceUSD = null, string? Province = null);
 
     // ── Productos ──
     public record ProductDto(
@@ -40,6 +41,9 @@ namespace BusinessSearcher.Application.DTOs.Operations
     /// almacén usa el valor general del producto para esa moneda (fallback), igual que hoy.</summary>
     public record SetWarehousePriceDto(
         decimal? CostPrice, decimal? CostPriceUSD, decimal? SellPrice, decimal? SellPriceUSD);
+
+    /// <summary>Provincia de un producto SOLO para un almacén. Null/vacío = quita la provincia asignada.</summary>
+    public record SetWarehouseProvinceDto(string? Province);
 
     // ── Importación de catálogo desde Excel ──
     /// <summary>Status: "Creado" (producto nuevo), "Sumado" (se sumó stock al que ya había en el almacén),

@@ -66,6 +66,7 @@ namespace BusinessSearcher.Infrastructure.Persistence.Configurations.Operations
             b.Property(x => x.AverageCostUSD).HasColumnType("decimal(18,2)");
             b.Property(x => x.SellPrice).HasColumnType("decimal(18,2)");
             b.Property(x => x.SellPriceUSD).HasColumnType("decimal(18,2)");
+            b.Property(x => x.Province).HasMaxLength(100);
             b.HasIndex(x => new { x.ProductId, x.WarehouseId }).IsUnique();
             b.HasIndex(x => x.WarehouseId);
             b.Ignore(x => x.DomainEvents);

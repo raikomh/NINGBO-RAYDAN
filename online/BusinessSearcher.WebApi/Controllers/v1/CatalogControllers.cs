@@ -89,6 +89,14 @@ namespace BusinessSearcher.API.Controllers.v1
             Guid id, [FromQuery] Guid warehouseId, [FromBody] SetWarehousePriceDto dto, CancellationToken ct)
             => Ok(await Mediator.Send(new SetProductWarehousePriceCommand(id, warehouseId, dto), ct), "Precio actualizado para esta tienda.");
 
+        /// <summary>Fija la provincia de este producto SOLO para un almacén (no afecta a los demás almacenes
+        /// que también lo tengan en stock).</summary>
+        [HttpPatch("{id:guid}/warehouse-province")]
+        [OpsRoles(OperationsRole.Almacenero, OperationsRole.JefeDeTurno)]
+        public async Task<IActionResult> SetWarehouseProvince(
+            Guid id, [FromQuery] Guid warehouseId, [FromBody] SetWarehouseProvinceDto dto, CancellationToken ct)
+            => Ok(await Mediator.Send(new SetProductWarehouseProvinceCommand(id, warehouseId, dto), ct), "Provincia actualizada para esta tienda.");
+
         /// <summary>
         /// Vacía el catálogo de UNA tienda: los productos compartidos con otra tienda solo pierden su
         /// stock/precio en esta (siguen existiendo en las demás); los exclusivos de esta tienda se borran

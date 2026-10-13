@@ -14,7 +14,7 @@ namespace BusinessSearcher.Application.Features.Operations
         public static CategoryDto ToDto(Category c) => new(c.Id, c.Name, c.Description, c.Code);
 
         public static ProductStockDto ToDto(ProductStock s) => new(s.WarehouseId, s.Quantity, s.AverageCost, s.AverageCostUSD,
-            s.SellPrice, s.SellPriceUSD);
+            s.SellPrice, s.SellPriceUSD, s.Province);
 
         public static ProductDto ToDto(Product p) => new(
             p.Id, p.Barcode, p.Name, p.Description, p.Unit, p.CategoryId, p.CostPrice, p.SellPrice,
@@ -115,6 +115,9 @@ namespace BusinessSearcher.Application.Features.Operations.Products
     /// (el que usan los demás almacenes). Es la forma correcta de tener precios distintos por tienda para el
     /// mismo producto, en vez de editar Product.SellPrice/SellPriceUSD (esos son globales a todas las tiendas).</summary>
     public record SetProductWarehousePriceCommand(Guid Id, Guid WarehouseId, SetWarehousePriceDto Dto) : IRequest<ProductDto>;
+    /// <summary>Fija la provincia de este producto SOLO para un almacén (dato libre, no afecta a los demás
+    /// almacenes que también lo tengan en stock).</summary>
+    public record SetProductWarehouseProvinceCommand(Guid Id, Guid WarehouseId, SetWarehouseProvinceDto Dto) : IRequest<ProductDto>;
     public record GetProductsQuery(string? Search, Guid? CategoryId, Guid? WarehouseId, bool? LowStockOnly) : IRequest<IReadOnlyList<ProductDto>>;
     public record GetProductByIdQuery(Guid Id) : IRequest<ProductDto>;
     public record GetProductByBarcodeQuery(string Barcode) : IRequest<ProductDto?>;
@@ -218,6 +221,20 @@ namespace BusinessSearcher.Application.Features.Operations.Products
             var p = await _repo.GetByIdAsync(t, r.Id, ct) ?? throw new DomainException("Producto no encontrado.");
             p.SetPriceForWarehouse(r.WarehouseId, d.SellPrice, d.SellPriceUSD);
             p.StockFor(r.WarehouseId).SetAverageCost(d.CostPrice, d.CostPriceUSD);
+            await _repo.UpdateAsync(p, ct); await _uow.SaveChangesAsync(ct);
+            return CatalogMapper.ToDto(p);
+        }
+    }
+
+    public class SetProductWarehouseProvinceHandler : IRequestHandler<SetProductWarehouseProvinceCommand, ProductDto>
+    {
+        private readonly IProductRepository _repo; private readonly IOperationsUnitOfWork _uow; private readonly ICurrentUserService _u;
+        public SetProductWarehouseProvinceHandler(IProductRepository repo, IOperationsUnitOfWork uow, ICurrentUserService u) { _repo = repo; _uow = uow; _u = u; }
+        public async Task<ProductDto> Handle(SetProductWarehouseProvinceCommand r, CancellationToken ct)
+        {
+            var t = OpsMapper.RequireTenant(_u);
+            var p = await _repo.GetByIdAsync(t, r.Id, ct) ?? throw new DomainException("Producto no encontrado.");
+            p.StockFor(r.WarehouseId).SetProvince(r.Dto.Province);
             await _repo.UpdateAsync(p, ct); await _uow.SaveChangesAsync(ct);
             return CatalogMapper.ToDto(p);
         }

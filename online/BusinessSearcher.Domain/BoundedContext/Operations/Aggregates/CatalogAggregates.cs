@@ -207,6 +207,8 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
         /// <summary>Precio de venta propio de este almacén (punto de venta). Null = usa el precio general del producto.</summary>
         public decimal? SellPrice      { get; private set; }
         public decimal? SellPriceUSD   { get; private set; }
+        /// <summary>Provincia de este producto en este almacén (dato libre, por tienda). Null = sin provincia asignada.</summary>
+        public string?  Province       { get; private set; }
 
         private ProductStock() { }
         private ProductStock(Guid id) : base(id) { }
@@ -229,13 +231,17 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Aggregates
             SellPrice = sellPrice; SellPriceUSD = sellPriceUsd; SetUpdated();
         }
 
+        public void SetProvince(string? province)
+        { Province = string.IsNullOrWhiteSpace(province) ? null : province.Trim(); SetUpdated(); }
+
         public static ProductStock Restore(Guid id, DateTime createdAt, DateTime? updatedAt,
-            Guid productId, Guid warehouseId, int quantity, decimal? averageCost, decimal? averageCostUsd)
+            Guid productId, Guid warehouseId, int quantity, decimal? averageCost, decimal? averageCostUsd,
+            string? province = null)
         {
             var stock = new ProductStock(id)
             {
                 ProductId = productId, WarehouseId = warehouseId, Quantity = quantity,
-                AverageCost = averageCost, AverageCostUSD = averageCostUsd
+                AverageCost = averageCost, AverageCostUSD = averageCostUsd, Province = province
             };
             stock.CreatedAt = createdAt;
             stock.UpdatedAt = updatedAt;

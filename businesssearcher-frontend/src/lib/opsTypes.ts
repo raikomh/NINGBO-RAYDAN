@@ -32,6 +32,8 @@ export interface OpsProductStock {
   /** Precio propio de este almacén (punto de venta). Ausente = usa el precio general del producto. */
   sellPrice?: number;
   sellPriceUSD?: number;
+  /** Provincia de este producto en este almacén (dato libre, por tienda). Ausente = sin asignar. */
+  province?: string;
 }
 
 export interface OpsProduct {

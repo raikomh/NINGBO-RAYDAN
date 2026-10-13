@@ -13,7 +13,7 @@ import {
   useOpsProducts, useSaveOpsProduct, useDeleteOpsProduct, useAdjustStock,
   useWarehouses, useOpsCategories, useSaveOpsCategory,
   useSetProductPublicVisibility, useUploadOpsProductImage, useExchangeRate, useSetWarehousePrice,
-  useSettings,
+  useSetWarehouseProvince, useSettings,
 } from '@/hooks/useOps';
 import type { OpsProduct, CreateOpsProduct } from '@/lib/opsTypes';
 import ImportProductsDialog from '@/components/dashboard/dialogs/ImportProductsDialog';
@@ -61,6 +61,8 @@ export default function InventoryPage() {
   const stockOf = (p: OpsProduct) => p.stocks.find((s) => s.warehouseId === warehouseId);
   const costUsdFor = (p: OpsProduct) => stockOf(p)?.averageCostUSD ?? p.costPriceUSD;
   const sellUsdFor = (p: OpsProduct) => stockOf(p)?.sellPriceUSD ?? p.sellPriceUSD;
+  // Provincia es un dato libre por tienda (no tiene valor general del producto como respaldo).
+  const provinceFor = (p: OpsProduct) => stockOf(p)?.province;
 
   const catName = (id?: string) => categories?.find((c) => c.id === id)?.name ?? '—';
 
@@ -112,6 +114,7 @@ export default function InventoryPage() {
                 <TableCell align="right">Coste (EUR)</TableCell>
                 <TableCell align="right">Coste (USD)</TableCell>
                 <TableCell align="right">Venta</TableCell>
+                <TableCell>Provincia</TableCell>
                 <TableCell align="right">Stock</TableCell>
                 <TableCell align="center">En la app</TableCell>
                 <TableCell align="right">Acciones</TableCell>
@@ -135,6 +138,7 @@ export default function InventoryPage() {
                     <TableCell align="right">{costUsdFor(p) != null ? `€${costUsdFor(p)!.toFixed(2)}` : '—'}</TableCell>
                     <TableCell align="right">{costUsdFor(p) != null ? `$${(costUsdFor(p)! * eurUsdRate).toFixed(2)}` : '—'}</TableCell>
                     <TableCell align="right">{sellUsdFor(p) != null ? `$${sellUsdFor(p)!.toFixed(2)}` : '—'}</TableCell>
+                    <TableCell>{provinceFor(p) ?? '—'}</TableCell>
                     <TableCell align="right">
                       <Chip size="small" color={low ? 'warning' : 'default'} label={st}
                         variant={low ? 'filled' : 'outlined'} />
@@ -166,7 +170,7 @@ export default function InventoryPage() {
                 );
               })}
               {(products ?? []).length === 0 && (
-                <TableRow><TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin productos</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} align="center" sx={{ py: 4, color: 'text.secondary' }}>Sin productos</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -272,6 +276,7 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
   const setVisibility = useSetProductPublicVisibility();
   const uploadImage = useUploadOpsProductImage();
   const setWarehousePrice = useSetWarehousePrice();
+  const setWarehouseProvince = useSetWarehouseProvince();
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Un producto nuevo siempre nace en la tienda activa: nunca se elige otro almacén aquí.
   const { storeId } = useActiveStore();
@@ -298,6 +303,7 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
     minOrderQuantity: product?.minOrderQuantity ?? 1,
   });
   const [isPubliclyVisible, setIsPubliclyVisible] = useState(product?.isPubliclyVisible ?? true);
+  const [province, setProvince] = useState(activeStock?.province ?? '');
 
   const set = (k: keyof CreateOpsProduct, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
   const num = (v: string) => (v === '' ? undefined : Number(v));
@@ -336,7 +342,12 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
               id: product.id, warehouseId: storeId,
               costPrice: cupFrom(form.costPriceUSD), costPriceUSD: form.costPriceUSD,
               sellPrice: cupFrom(form.sellPriceUSD), sellPriceUSD: form.sellPriceUSD,
-            }, { onSuccess: onClose });
+            }, {
+              onSuccess: () => setWarehouseProvince.mutate(
+                { id: product.id, warehouseId: storeId, province: province || null },
+                { onSuccess: onClose },
+              ),
+            });
           } else {
             onClose();
           }
@@ -354,7 +365,16 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
       barcode: form.barcode || undefined,
       isPubliclyVisible,
     };
-    save.mutate({ id: undefined, dto }, { onSuccess: onClose });
+    save.mutate({ id: undefined, dto }, {
+      onSuccess: (res) => {
+        const createdId = (res.data?.data ?? res.data)?.id as string | undefined;
+        if (storeId && province && createdId) {
+          setWarehouseProvince.mutate({ id: createdId, warehouseId: storeId, province }, { onSuccess: onClose });
+        } else {
+          onClose();
+        }
+      },
+    });
   };
 
   return (
@@ -411,6 +431,10 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
               InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
           </Grid>
 
+          <Grid item xs={6} sm={4}>
+            <TextField fullWidth size="small" label={product ? `Provincia (${activeWarehouse?.name ?? 'esta tienda'})` : 'Provincia'}
+              value={province} onChange={(e) => setProvince(e.target.value)} />
+          </Grid>
           <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Impuesto %" value={form.taxRate ?? ''} onChange={(e) => set('taxRate', num(e.target.value))} /></Grid>
           <Grid item xs={6} sm={4}><TextField fullWidth size="small" type="number" label="Venta mínima (mayorista)" value={form.minOrderQuantity || ''} onChange={(e) => set('minOrderQuantity', e.target.value === '' ? 1 : Number(e.target.value))} /></Grid>
 
@@ -425,11 +449,11 @@ function ProductDialog({ product, onClose }: { product: OpsProduct | null; onClo
           )}
           <Grid item xs={12}><FormControlLabel control={<Switch checked={form.forSale ?? true} onChange={(e) => set('forSale', e.target.checked)} />} label="Disponible para la venta" /></Grid>
         </Grid>
-        {(save.isError || setWarehousePrice.isError) && <Alert severity="error" sx={{ mt: 2 }}>No se pudo guardar el producto.</Alert>}
+        {(save.isError || setWarehousePrice.isError || setWarehouseProvince.isError) && <Alert severity="error" sx={{ mt: 2 }}>No se pudo guardar el producto.</Alert>}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancelar</Button>
-        <Button variant="contained" onClick={submit} disabled={!form.name || save.isPending || setWarehousePrice.isPending}>Guardar</Button>
+        <Button variant="contained" onClick={submit} disabled={!form.name || save.isPending || setWarehousePrice.isPending || setWarehouseProvince.isPending}>Guardar</Button>
       </DialogActions>
     </Dialog>
   );
