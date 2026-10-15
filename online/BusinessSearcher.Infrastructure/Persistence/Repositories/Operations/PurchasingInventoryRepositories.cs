@@ -76,6 +76,16 @@ namespace BusinessSearcher.Infrastructure.Persistence.Repositories.Operations
             _db.InventoryMovements.RemoveRange(rows);
             return rows.Count;
         }
+
+        public async Task<int> DeleteByWarehouseAndProductsAsync(Guid tenantId, Guid warehouseId, IReadOnlyList<Guid> productIds, CancellationToken ct = default)
+        {
+            var rows = await _db.InventoryMovements
+                .Where(m => m.TenantId == tenantId && (m.FromWarehouseId == warehouseId || m.ToWarehouseId == warehouseId)
+                    && productIds.Contains(m.ProductId))
+                .ToListAsync(ct);
+            _db.InventoryMovements.RemoveRange(rows);
+            return rows.Count;
+        }
     }
 
     public class InventoryCountRepository : IInventoryCountRepository

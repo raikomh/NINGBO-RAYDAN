@@ -26,6 +26,8 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Repositories
         Task AddAsync(InventoryMovement movement, CancellationToken ct = default);
         /// <summary>Borra los movimientos donde ese almacén es origen o destino. Devuelve cuántos borró.</summary>
         Task<int> DeleteByWarehouseAsync(Guid tenantId, Guid warehouseId, CancellationToken ct = default);
+        /// <summary>Borra los movimientos de ese almacén para SOLO esos productos. Devuelve cuántos borró.</summary>
+        Task<int> DeleteByWarehouseAndProductsAsync(Guid tenantId, Guid warehouseId, IReadOnlyList<Guid> productIds, CancellationToken ct = default);
     }
 
     public interface IInventoryCountRepository

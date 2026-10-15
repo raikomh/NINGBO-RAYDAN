@@ -355,6 +355,72 @@ namespace BusinessSearcher.Application.Features.Operations.Products
         }
     }
 
+    /// <summary>Igual que ClearWarehouseProductsCommand pero acotado a una lista específica de productos
+    /// (p.ej. "lo que ya no está en el catálogo nuevo"), sin tocar el resto de la tienda.</summary>
+    public record ClearSpecificProductsCommand(Guid WarehouseId, ClearSpecificProductsDto Dto)
+        : IRequest<ClearSpecificProductsResultDto>;
+
+    public class ClearSpecificProductsHandler : IRequestHandler<ClearSpecificProductsCommand, ClearSpecificProductsResultDto>
+    {
+        private readonly IProductRepository _products; private readonly IProductPriceHistoryRepository _priceHistory;
+        private readonly IInventoryMovementRepository _movements; private readonly ISaleRepository _sales;
+        private readonly IWarehouseRepository _warehouses; private readonly IOperationsUnitOfWork _uow;
+        private readonly ICurrentUserService _u;
+
+        public ClearSpecificProductsHandler(
+            IProductRepository products, IProductPriceHistoryRepository priceHistory,
+            IInventoryMovementRepository movements, ISaleRepository sales, IWarehouseRepository warehouses,
+            IOperationsUnitOfWork uow, ICurrentUserService u)
+        {
+            _products = products; _priceHistory = priceHistory; _movements = movements; _sales = sales;
+            _warehouses = warehouses; _uow = uow; _u = u;
+        }
+
+        public async Task<ClearSpecificProductsResultDto> Handle(ClearSpecificProductsCommand r, CancellationToken ct)
+        {
+            var t = OpsMapper.RequireTenant(_u);
+            var d = r.Dto;
+            var warehouse = await _warehouses.GetByIdAsync(t, r.WarehouseId, ct)
+                ?? throw new DomainException("Almacén no encontrado.");
+
+            var unlinked = 0; var deleted = 0; var priceHistoryDeleted = 0;
+            var notFound = new List<string>();
+            var deletedIds = new List<Guid>();
+
+            foreach (var productId in d.ProductIds)
+            {
+                var p = await _products.GetByIdAsync(t, productId, ct);
+                if (p is null) { notFound.Add(productId.ToString()); continue; }
+
+                var isShared = p.Stocks.Any(s => s.WarehouseId != r.WarehouseId);
+                if (isShared)
+                {
+                    p.RemoveStockForWarehouse(r.WarehouseId);
+                    await _products.UpdateAsync(p, ct);
+                    unlinked++;
+                }
+                else
+                {
+                    if (d.DeletePriceHistory)
+                        priceHistoryDeleted += await _priceHistory.DeleteByProductAsync(t, p.Id, ct);
+                    await _products.HardDeleteAsync(p, ct);
+                    deleted++;
+                    deletedIds.Add(p.Id);
+                }
+            }
+
+            var movementsDeleted = d.DeleteInventoryMovements && deletedIds.Count > 0
+                ? await _movements.DeleteByWarehouseAndProductsAsync(t, r.WarehouseId, deletedIds, ct) : 0;
+            var salesDeleted = d.DeleteSalesHistory && deletedIds.Count > 0
+                ? await _sales.DeleteByWarehouseAndProductsAsync(t, r.WarehouseId, deletedIds, ct) : 0;
+
+            await _uow.SaveChangesAsync(ct);
+
+            return new ClearSpecificProductsResultDto(
+                warehouse.Name, d.ProductIds.Count, unlinked, deleted, priceHistoryDeleted, movementsDeleted, salesDeleted, notFound);
+        }
+    }
+
     // ── Subida de foto de producto ──
     public record UploadProductImageCommand(Guid ProductId, IFormFile File) : IRequest<string>;
 

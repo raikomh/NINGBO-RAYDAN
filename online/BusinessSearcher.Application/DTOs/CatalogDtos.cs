@@ -37,6 +37,15 @@ namespace BusinessSearcher.Application.DTOs.Operations
 
     public record ClearWarehouseProductsDto(bool DeletePriceHistory, bool DeleteInventoryMovements, bool DeleteSalesHistory);
 
+    /// <summary>Igual que ClearWarehouseProductsResultDto pero para una lista específica de productos
+    /// (no todo el catálogo de la tienda).</summary>
+    public record ClearSpecificProductsResultDto(
+        string WarehouseName, int ProductsRequested, int ProductsUnlinked, int ProductsDeleted,
+        int PriceHistoryDeleted, int MovementsDeleted, int SalesDeleted, IReadOnlyList<string> NotFound);
+
+    public record ClearSpecificProductsDto(
+        IReadOnlyList<Guid> ProductIds, bool DeletePriceHistory, bool DeleteInventoryMovements, bool DeleteSalesHistory);
+
     /// <summary>Costo y precio de venta propios de UN almacén para este producto. Null en un campo = ese
     /// almacén usa el valor general del producto para esa moneda (fallback), igual que hoy.</summary>
     public record SetWarehousePriceDto(

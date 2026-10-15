@@ -12,6 +12,11 @@ namespace BusinessSearcher.Domain.BoundedContext.Operations.Repositories
         /// <summary>Borra para siempre las ventas con algún renglón en ese almacén (y sus items/pagos, en
         /// cascada). Devuelve cuántas ventas borró. Operación destructiva — no hay forma de recuperarlas.</summary>
         Task<int> DeleteByWarehouseAsync(Guid tenantId, Guid warehouseId, CancellationToken ct = default);
+        /// <summary>Borra para siempre las ventas de ese almacén que tengan algún renglón de SOLO esos
+        /// productos (y sus items/pagos, en cascada). Si la venta tiene otros productos no incluidos en la
+        /// lista, se borra igual entera (mismo criterio que DeleteByWarehouseAsync, acotado a estos productos).
+        /// Devuelve cuántas ventas borró.</summary>
+        Task<int> DeleteByWarehouseAndProductsAsync(Guid tenantId, Guid warehouseId, IReadOnlyList<Guid> productIds, CancellationToken ct = default);
     }
 
     public interface ICashRegisterRepository

@@ -112,6 +112,17 @@ namespace BusinessSearcher.API.Controllers.v1
                 "Catálogo de la tienda vaciado.");
 
         /// <summary>
+        /// Igual que clear-warehouse pero solo para los productos indicados (p.ej. los que ya no están en
+        /// un catálogo nuevo), sin tocar el resto de la tienda. Operación destructiva — solo Administrador.
+        /// </summary>
+        [HttpPost("clear-specific/{warehouseId:guid}")]
+        [OpsRoles]
+        public async Task<IActionResult> ClearSpecific(
+            Guid warehouseId, [FromBody] ClearSpecificProductsDto dto, CancellationToken ct)
+            => Ok(await Mediator.Send(new ClearSpecificProductsCommand(warehouseId, dto), ct),
+                "Productos quitados de la tienda.");
+
+        /// <summary>
         /// Importa el catálogo desde Excel (Código, Producto, Categoría, Cant. disponible, Precio x unidad (USD);
         /// Descripción opcional). Crea categorías y productos nuevos; los códigos existentes no se duplican: su
         /// stock en el almacén indicado se ajusta al valor del archivo. Todo-o-nada ante errores de archivo.

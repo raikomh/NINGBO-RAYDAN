@@ -48,6 +48,15 @@ namespace BusinessSearcher.Infrastructure.Persistence.Repositories.Operations
             _db.Sales.RemoveRange(rows); // Items/Payments en cascada (configurado en SalesCashConfigurations).
             return rows.Count;
         }
+
+        public async Task<int> DeleteByWarehouseAndProductsAsync(Guid tenantId, Guid warehouseId, IReadOnlyList<Guid> productIds, CancellationToken ct = default)
+        {
+            var rows = await _db.Sales.Include(s => s.Items).Include(s => s.Payments)
+                .Where(s => s.TenantId == tenantId && s.Items.Any(i => i.WarehouseId == warehouseId && productIds.Contains(i.ProductId)))
+                .ToListAsync(ct);
+            _db.Sales.RemoveRange(rows);
+            return rows.Count;
+        }
     }
 
     public class CashRegisterRepository : ICashRegisterRepository
